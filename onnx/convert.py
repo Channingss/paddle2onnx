@@ -21,24 +21,13 @@ import paddle.fluid.core as core
 import paddle.fluid as fluid
 import onnx
 from onnx import helper, onnx_pb
-from paddle2onnx.op_mapper.paddle2onnx.opset9.opset import OpSet9
-from paddle2onnx.op_mapper.paddle2onnx.opset10.opset import OpSet10
-from paddle2onnx.op_mapper.paddle2onnx.opset11.opset import OpSet11
 from paddle.fluid.dygraph.base import program_desc_tracing_guard, switch_to_static_graph
+from paddle2onnx.onnx.utils import DTYPE_MAP
 
-class PaddleOpMapper(object):
+class Converter(object):
     def __init__(self):
-        self.paddle_onnx_dtype_map = {
-            core.VarDesc.VarType.FP32: onnx_pb.TensorProto.FLOAT,
-            core.VarDesc.VarType.FP64: onnx_pb.TensorProto.DOUBLE,
-            core.VarDesc.VarType.INT32: onnx_pb.TensorProto.INT32,
-            core.VarDesc.VarType.INT16: onnx_pb.TensorProto.INT16,
-            core.VarDesc.VarType.INT16: onnx_pb.TensorProto.UINT16,
-            core.VarDesc.VarType.INT64: onnx_pb.TensorProto.INT64,
-            core.VarDesc.VarType.BOOL: onnx_pb.TensorProto.BOOL
-        }
         self.support_opsets = [9, 10, 11]
-        self.default_opset = 10
+        self.default_opset = 9
         self.name_counter = dict()
         self.op_set = None
 
@@ -55,7 +44,7 @@ class PaddleOpMapper(object):
             tensor = helper.make_tensor(
                 name=param.name,
                 dims=param.shape,
-                data_type=self.paddle_onnx_dtype_map[param.dtype],
+                data_type=DTYPE_MAP[param.dtype],
                 vals=weight.flatten().tolist())
             node = helper.make_node(
                 'Constant', inputs=[], outputs=[param.name], value=tensor)
@@ -63,12 +52,9 @@ class PaddleOpMapper(object):
         return nodes
 
     @switch_to_static_graph
-    def convert(self, concrete_program, save_dir, opset_version=10):
+    def convert(self, concrete_program, save_dir, opset_version=9):
         program = concrete_program.main_program.clone()
-        #for param in concrete_program.parameters:
-        #    print(dir(param))
-        #    break
-        self.op_set = self.create_opset(opset_version)
+        self.op_set = self.import_ops_with_opset_version(opset_version)
         weight_nodes = self.convert_weights(concrete_program.parameters)
         op_nodes = list()
         input_nodes = list()
@@ -132,7 +118,7 @@ class PaddleOpMapper(object):
         print("\nTranslated model saved in {}".format(
             os.path.join(save_dir, 'paddle2onnx_model.onnx')))
 
-    def create_opset(self, opset_version=10):
+    def import_ops_with_opset_version(self, opset_version=9):
         run_opset = self.default_opset
         opset = ''
         if opset_version in self.support_opsets:
@@ -147,5 +133,8 @@ class PaddleOpMapper(object):
             'Now, onnpaddle2onnx support convert onnx model opset_verison {},'
             'opset_verison of your onnx model is {}, automatically treated as op_set: {}.'
             .format(self.support_opsets, opset_version, run_opset))
-        opset = 'OpSet' + str(run_opset)
-        return eval(opset)()
+        opset = 'opset' + str(run_opset)
+        import importlib
+        ops_module = importlib.import_module('.opset', package='paddle2onnx.onnx.'+opset)
+
+        return ops_module
