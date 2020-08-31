@@ -161,8 +161,8 @@ def debug_model(op_list, op_trackers, nms_outputs, args):
             raise Exception("The op %s test check failed!" % (op_name))
     print("----------------------CHECK TEST OPS OK!-----------------------")
 
-    # In some tools, examples(Tf2Onnx, Caffe2Onnx), therse tools just check the last layer output, 
-    # we will check all layers output. Just ensure the robustness of Paddle2Onnx
+    # In some tools, examples(Tf2ONNX, Caffe2ONNX), therse tools just check the last layer output, 
+    # we will check all layers output. Just ensure the robustness of Paddle2ONNX
     # start check the output of op
     print("--------------------START CHECK OPS OUTPUT!--------------------")
     # get the intermediate result of fluid_model & onnx model
