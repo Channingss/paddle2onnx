@@ -29,11 +29,11 @@ class StaticGraph():
         prog_translator = ProgramTranslator()
         if not prog_translator.enable:
             raise RuntimeError(
-                "The paddle.jit.save doesn't work when setting ProgramTranslator.enable=False."
+                "static graph doesn't work when setting ProgramTranslator.enable=False."
             )
         if not isinstance(layer, Layer):
             raise TypeError(
-                "The input layer of paddle.jit.save should be 'Layer', but received layer type is %s."
+                "The input layer should be 'Layer', but received layer type is %s."
                 % type(layer))
     
         if input_spec is not None:

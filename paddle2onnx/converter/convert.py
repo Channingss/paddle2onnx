@@ -22,7 +22,7 @@ import paddle.fluid as fluid
 import onnx
 from onnx import helper, onnx_pb
 from paddle.fluid.dygraph.base import program_desc_tracing_guard, switch_to_static_graph
-from paddle2onnx.onnx.utils import DTYPE_MAP
+from .utils import DTYPE_MAP
 
 class Converter(object):
     def __init__(self):
@@ -135,6 +135,6 @@ class Converter(object):
             .format(self.support_opsets, opset_version, run_opset))
         opset = 'opset' + str(run_opset)
         import importlib
-        ops_module = importlib.import_module('.opset', package='paddle2onnx.onnx.'+opset)
+        ops_module = importlib.import_module('.opset', package='paddle2onnx.paddle2onnx.converter.'+opset)
 
         return ops_module
