@@ -3,17 +3,6 @@
 paddle2onnx支持将**PaddlePaddle**框架下产出的模型转化到**ONNX**模型格式.
 paddle2onnx is a toolkit for converting trained model to **ONNX** from **PaddlePaddle** deep learning framework.
 
-## 更新记录
-2019.09.25
-1. 新增支持SE_ResNet50_vd、SqueezeNet1_0、SE_ResNext50_32x4d、Xception41、VGG16、InceptionV4、YoloV3模型转换。
-2. 解决0.1版本无法适配新版ONNX版本问题。
-
-2109.08.20
-1. 解决preview版本无法适配最新的PaddlePaddle和ONNX版本问题。
-2. 功能上支持主流的图像分类模型和部分图像检测模型。
-3. 统一开发者精度对齐测试框架，代码开发和贡献者可以通过内置的Operators单测和模型Layer测试框架来验证转换后的模型的精度。
-4. 统一对外的使用接口，用户可利用PIP安装功能包进行使用。
-
 ## 环境依赖
 
 ### 1. 普通用户环境配置
@@ -37,11 +26,13 @@ paddle2onnx is a toolkit for converting trained model to **ONNX** from **PaddleP
 > 如果用户只是想将paddle模型转化成onnx模型，可以使用下面的命令进行操作。
 
     paddle2onnx --fluid_model src_dir  --onnx_model dist_name
+
 ###  开发者使用方式
 > 如果用户有一个新的模型要转成onnx模型，想验证模型的精确度，可以使用下面的方式来进行验证。
 
     git clone https://github.com/PaddlePaddle/paddle2onnx.git
     python fluid_onnx/fluid_to_onnx.py --fluid_model src --onnx_model dist --debug
+
 ### 参数选项
 | 参数 |参数说明 |
 |----------|--------------|

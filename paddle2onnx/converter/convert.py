@@ -38,8 +38,6 @@ class Converter(object):
                 continue
             if not param.persistable:
                 continue
-            #print(param.data)
-            #break
             weight = np.array(param.value().get_tensor())
             tensor = helper.make_tensor(
                 name=param.name,
@@ -67,12 +65,15 @@ class Converter(object):
                 if isinstance(feed, fluid.Variable):
                     node = getattr(self.op_set, 'feed')(feed, block)
                     input_nodes.append(node)
+                if isinstance(feed, dict):
+                    for key, var in feed.items():
+                        node = getattr(self.op_set, 'feed')(var, block)
+                        input_nodes.append(node)
             for fetch in concrete_program.outputs:
                 node = getattr(self.op_set, 'fetch')(fetch, block)
                 output_nodes.append(node)
         for block in program.blocks:
             for i, op in enumerate(block.ops):
-                print(op)
                 sys.stdout.write("\rTotal:{}, Current:{} : {} ".format(
                     len(block.ops), i + 1, op.type))
                 sys.stdout.flush()
