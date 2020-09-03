@@ -20,7 +20,7 @@ import paddle.fluid.core as core
 import paddle.fluid as fluid
 import onnx
 from onnx import helper, onnx_pb
-from ..utils import DTYPE_MAP, get_name, make_constant_node
+from ..utils import DTYPE_MAP, DTYPE_NUMPY_MAP, get_name, make_constant_node
 
 def conv2d(op, block):
     kernel_shape = block.var(op.input('Filter')[0]).shape
@@ -427,8 +427,7 @@ def fill_constant(op, block):
     dtype = op.attr('dtype')
     shape = op.attr('shape')
     value = np.ones(shape) * value
-    if dtype == 2:
-        value = value.astype('int32')
+    value = value.astype(DTYPE_NUMPY_MAP[dtype])
     node = helper.make_node(
         'Constant',
         inputs=[],
@@ -634,15 +633,32 @@ def elementwise_mul(op, block):
     else:
         raise Exception("Unexpected situation happend in elementwise_mul")
     return node
+def feed(op, block):
+    name = op.output('Out')[0]
+    var = block.var(name)
+    tensor_info = helper.make_tensor_value_info(
+        name=name,
+        shape=var.shape,
+        elem_type=DTYPE_MAP[var.dtype])
+    return tensor_info
 
-def feed(var, block):
+def fetch(op, block):
+    name = op.input('X')[0]
+    var = block.var(name)
+    tensor_info = helper.make_tensor_value_info(
+        name=name,
+        shape=var.shape,
+        elem_type=DTYPE_MAP[var.dtype])
+    return tensor_info
+
+def feed(var, block=None):
     tensor_info = helper.make_tensor_value_info(
         name=var.name,
         shape=var.shape,
         elem_type=DTYPE_MAP[var.dtype])
     return tensor_info
 
-def fetch(var, block):
+def fetch(var, block=None):
     tensor_info = helper.make_tensor_value_info(
         name=var.name,
         shape=var.shape,

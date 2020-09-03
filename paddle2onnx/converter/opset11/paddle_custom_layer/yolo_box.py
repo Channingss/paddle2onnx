@@ -15,9 +15,9 @@
 import onnx
 import numpy as np
 from onnx import onnx_pb, helper
-from paddle2onnx.op_mapper.paddle2onnx.opset9.paddle_custom_layer.yolo_box import is_static_shape
-from paddle2onnx.op_mapper.paddle2onnx.opset9.paddle_custom_layer.yolo_box import get_old_name
-from paddle2onnx.op_mapper.paddle2onnx.opset9.paddle_custom_layer.yolo_box import MAX_FLOAT32
+from paddle2onnx.paddle2onnx.converter.opset9.paddle_custom_layer.yolo_box import is_static_shape
+from paddle2onnx.paddle2onnx.converter.opset9.paddle_custom_layer.yolo_box import get_old_name
+from paddle2onnx.paddle2onnx.converter.opset9.paddle_custom_layer.yolo_box import MAX_FLOAT32
 
 
 def yolo_box(op, block):

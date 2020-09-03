@@ -31,9 +31,9 @@ class Converter(object):
         self.name_counter = dict()
         self.op_set = None
 
-    def convert_weights(self, parameters):
+    def convert_weights(self, concrete_program):
         nodes = list()
-        for param in parameters:
+        for param in concrete_program.parameters:
             if param.name.endswith('feed') or param.name.endswith('fetch'):
                 continue
             if not param.persistable:
@@ -49,30 +49,27 @@ class Converter(object):
             nodes.append(node)
         return nodes
 
-    @switch_to_static_graph
-    def convert(self, concrete_program, save_dir, opset_version=9):
-        program = concrete_program.main_program.clone()
-        self.op_set = self.import_ops_with_opset_version(opset_version)
-        weight_nodes = self.convert_weights(concrete_program.parameters)
-        op_nodes = list()
-        input_nodes = list()
-        output_nodes = list()
-        unsupported_ops = set()
+    def convert_inputs(self, concrete_program):
+        input_nodes = []
+        for ipt in concrete_program.inputs:
+            if isinstance(ipt, fluid.Variable):
+                input_nodes.append(getattr(self.op_set, 'feed')(ipt))
+            if isinstance(ipt, dict):
+                for key, var in ipt.items():
+                    input_nodes.append(getattr(self.op_set, 'feed')(var))
+        return input_nodes 
 
-        print("Translating PaddlePaddle to ONNX...\n")
-        for block in program.blocks:
-            for feed in concrete_program.inputs:
-                if isinstance(feed, fluid.Variable):
-                    node = getattr(self.op_set, 'feed')(feed, block)
-                    input_nodes.append(node)
-                if isinstance(feed, dict):
-                    for key, var in feed.items():
-                        node = getattr(self.op_set, 'feed')(var, block)
-                        input_nodes.append(node)
-            for fetch in concrete_program.outputs:
-                node = getattr(self.op_set, 'fetch')(fetch, block)
-                output_nodes.append(node)
-        for block in program.blocks:
+    def convert_outputs(self, concrete_program):
+        output_nodes = []
+        for opt in concrete_program.outputs:
+            if isinstance(opt, fluid.Variable):
+                output_nodes.append(getattr(self.op_set, 'fetch')(opt))
+        return output_nodes
+
+    def convert_ops(self, concrete_program):
+        op_nodes = list()
+        unsupported_ops = set()
+        for block in concrete_program.main_program.blocks:
             for i, op in enumerate(block.ops):
                 sys.stdout.write("\rTotal:{}, Current:{} : {} ".format(
                     len(block.ops), i + 1, op.type))
@@ -82,24 +79,31 @@ class Converter(object):
                     continue
                 if len(unsupported_ops) > 0:
                     continue
+                if op.type in ['feed', 'fetch']:
+                    continue
                 node = getattr(self.op_set, op.type)(op, block)
-                if op.type == 'feed':
-                    print(node.name)
-                    input_nodes.append(node)
-                elif op.type == 'fetch':
-                    output_nodes.append(node)
+                if isinstance(node, list):
+                    op_nodes = op_nodes + node
                 else:
-                    if isinstance(node, list):
-                        op_nodes = op_nodes + node
-                    else:
-                        op_nodes.append(node)
-
+                    op_nodes.append(node)
         if len(unsupported_ops) > 0:
-            print("\nThere's {} ops are not supported yet".format(
-                len(unsupported_ops)))
+            unsupported_ops_string = "\nThere's {} ops are not supported yet\n".format(
+                len(unsupported_ops))
             for op in unsupported_ops:
-                print("=========== {} ===========".format(op))
-            return
+                unsupported_ops_string += "=========== {} ===========\n".format(op)
+            raise ValueError(unsupported_ops_string)
+        return op_nodes
+
+    @switch_to_static_graph
+    def convert(self, concrete_program, save_dir, opset_version=9):
+        program = concrete_program.main_program.clone()
+        self.op_set = self.import_ops_with_opset_version(opset_version)
+
+        print("Translating PaddlePaddle to ONNX...\n")
+        input_nodes = self.convert_inputs(concrete_program)
+        output_nodes = self.convert_outputs(concrete_program)
+        weight_nodes = self.convert_weights(concrete_program)
+        op_nodes = self.convert_ops(concrete_program)
 
         graph = helper.make_graph(
             nodes=weight_nodes + op_nodes,
@@ -137,5 +141,4 @@ class Converter(object):
         opset = 'opset' + str(run_opset)
         import importlib
         ops_module = importlib.import_module('.opset', package='paddle2onnx.paddle2onnx.converter.'+opset)
-
         return ops_module

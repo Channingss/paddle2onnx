@@ -19,6 +19,18 @@ DTYPE_MAP = {
     core.VarDesc.VarType.INT32: onnx_pb.TensorProto.INT32,
     core.VarDesc.VarType.INT16: onnx_pb.TensorProto.INT16,
     core.VarDesc.VarType.INT16: onnx_pb.TensorProto.UINT16,
+    core.VarDesc.VarType.INT64: onnx_pb.TensorProto.INT64,
+    core.VarDesc.VarType.BOOL: onnx_pb.TensorProto.BOOL,
+}
+
+DTYPE_NUMPY_MAP = {
+    core.VarDesc.VarType.FP32: 'float32',
+    core.VarDesc.VarType.FP64: 'float64',
+    core.VarDesc.VarType.INT32: 'int32',
+    core.VarDesc.VarType.INT64: 'int64',
+    core.VarDesc.VarType.INT16: 'int16',
+    core.VarDesc.VarType.INT16: 'uint16',
+    core.VarDesc.VarType.BOOL: 'bool',
 }
 
 name_counter = dict()
