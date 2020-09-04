@@ -67,11 +67,7 @@ class StaticGraph():
                  input_spec,
                  output_spec=None,
                  prune_iout=False):
-        self.program = None 
-        self.input_spec = input_spec
-        self.output_spec = output_spec
-        self.model = model
-        self.to_static_program(prune_iout)
+        self.program = self.to_static_program(model, input_spec, output_spec, prune_iout)
 
     def get_inout_spec(self, all_vars, target_vars, return_name=False):
         result_list = []
@@ -92,10 +88,10 @@ class StaticGraph():
             return result_list,  [var.name for var in result_list]
         return result_list
 
-    def prune_input_output(self, main_program):
-        feeded_vars, feeded_var_names= self.get_inout_spec(self.program.inputs, self.input_spec, True)
-        target_vars = self.get_inout_spec(self.program.outputs, self.output_spec)
-        main_program = main_program.clone()
+    def prune_input_output(self, concrete_program, input_spec, output_spec):
+        feeded_vars, feeded_var_names= self.get_inout_spec(concrete_program.inputs, input_spec, True)
+        target_vars = self.get_inout_spec(concrete_program.outputs, output_spec)
+        main_program = concrete_program.main_program.clone()
         global_block = main_program.global_block()
         need_to_remove_op_index = []
         for i, op in enumerate(global_block.ops):
@@ -116,33 +112,38 @@ class StaticGraph():
         prepend_feed_ops(main_program, feeded_var_names)
         append_fetch_ops(main_program, fetch_var_names)
 
-        self.program.outputs = tuple(target_vars) 
-        self.program.inputs = tuple(feeded_vars) 
-        return main_program
+        concrete_program.outputs = tuple(target_vars) 
+        concrete_program.inputs = tuple(feeded_vars) 
+        concrete_program.main_program = main_program
+
+        return concrete_program
 
     @switch_to_static_graph
-    def to_static_program(self, prune_iout=False):
+    def to_static_program(self, model, input_spec, out_spec, prune_iout=False):
         paddle.jit.set_verbosity(10)
-        if isinstance(self.model, TranslatedLayer):
-            # TODO 待提供concrete_program的接口
-            concrete_program  =  self.model.program()
-        elif isinstance(self.model, Layer):
-            if isinstance(self.model.forward, StaticLayer):
-                #concrete_program, _ = self.model.forward.get_concrete_program(*self.input_spec)
-                concrete_program  = self.model.forward.concrete_program
-            elif inspect.ismethod(self.model.forward):
-                concrete_program, _ = declarative(self.model.forward).get_concrete_program(*self.input_spec)
+        if isinstance(model, Layer):
+            if isinstance(model.forward, StaticLayer):
+                concrete_program  = model.forward.concrete_program
+            elif inspect.ismethod(model.forward):
+                concrete_program, _ = declarative(model.forward).get_concrete_program(*input_spec)
             else: 
                 raise TypeError(
-                    "The foward of model should be 'Function' or 'StaticLayer', but received layer type is %s."
-                    % type(self.model))
-        elif isinstance(self.model, StaticLayer):
-            concrete_program, _ = self.model.get_concrete_program(*self.input_spec)
+                    "The foward of model should be 'Function' or 'StaticLayer', but received forward type is %s."
+                    % type(model.forward))
+        elif isinstance(model, StaticLayer):
+            concrete_program  = model.concrete_program
+            #concrete_program, _ = model.get_concrete_program(*input_spec)
         else:
             raise TypeError(
-                "The input model should be 'Layer','StaticLayer' or 'TranslatedLayer', but received layer type is %s."
-                % type(self.model))
-        self.program = concrete_program
+                "The input model should be 'Layer' or 'StaticLayer', but received  type is %s."
+                % type(model))
         if prune_iout: 
-            self.program.main_program = self.prune_input_output(self.program.main_program.clone())
+            if isinstance(model, StaticLayer) or isinstance(model.forward, StaticLayer):
+                concrete_program = self.prune_input_output(concrete_program)
+            else:
+                #TODO
+                raise TypeError(
+                    "The  model should be staticed, please use api: to static model.") 
+
+        return concrete_program
 
