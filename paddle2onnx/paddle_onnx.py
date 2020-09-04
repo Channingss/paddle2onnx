@@ -47,11 +47,11 @@ def arg_parser():
     return parser
 
 
-def dynamic_graph_onnx(model, input_spec, save_dir, output_spec=None, opset_version=9):
+def dynamic_graph_onnx(model, input_spec, save_dir, output_spec=None, prune_iout=False, opset_version=9, **kwargs):
     from .static_graph.graph import StaticGraph
     from .converter.convert import Converter
     import paddle.fluid as fluid
-    static_graph = StaticGraph(model, input_spec, output_spec)
+    static_graph = StaticGraph(model, input_spec=input_spec, output_spec=output_spec, prune_iout=prune_iout, **kwargs)
     converter = Converter()
     converter.convert(
         static_graph.program,

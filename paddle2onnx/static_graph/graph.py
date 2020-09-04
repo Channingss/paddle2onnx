@@ -14,6 +14,7 @@ from paddle.fluid.framework import Block, ParamBase, Program, Variable
 from paddle.fluid.framework import dygraph_only, in_dygraph_mode
 from paddle.fluid.dygraph.io import TranslatedLayer
 from paddle.static import InputSpec
+from paddle.fluid.executor import scope_guard
 from paddle.fluid.dygraph import declarative
 
 def prepend_feed_ops(inference_program,
@@ -64,41 +65,23 @@ class StaticGraph():
     def __init__(self,
                  model,
                  input_spec,
-                 output_spec=None):
-        self.program = None
+                 output_spec=None,
+                 prune_iout=False):
+        self.program = None 
         self.input_spec = input_spec
         self.output_spec = output_spec
         self.model = model
-        self.to_static_program()
+        self.to_static_program(prune_iout)
 
-    def _verify_input_spec(self, input_spec):
-        """
-        Verifies the `input_spec` and its element type is valid.
-        """
-        if not isinstance(input_spec, (tuple, list)):
-            raise TypeError(
-                "The type(input_spec) should be one of (tuple, list), but received {}.".
-                format(type_name(input_spec)))
-        input_spec = tuple(input_spec)
-        for spec in flatten(input_spec):
-            if not isinstance(spec, paddle.static.InputSpec):
-                raise ValueError(
-                    "The type(elem) from input_spec should be `InputSpec`, but received {}.".
-                    format(type_name(spec)))
-
-        return input_spec
-
-    def generate_input_spec_by_name(self, all_vars, target_vars, return_name=False):
+    def get_inout_spec(self, all_vars, target_vars, return_name=False):
         result_list = []
         valid_var_dict = {}
         valid_vars = [var for var in all_vars if isinstance(var, Variable)]
         for var in valid_vars:
             valid_var_dict[var.name] = var
-        if target_vars:
+        if target_vars is not None:
             for i, var in enumerate(target_vars):
                 # check target var whether exists
-                if var is None: 
-                    continue
                 if var.name not in valid_var_dict:
                     raise RuntimeError(
                         "The variable to feed/fetch are not exist.")
@@ -106,44 +89,47 @@ class StaticGraph():
         else:
             result_list = valid_vars
         if return_name:
-            result_list = [var.name for var in result_list]
+            return result_list,  [var.name for var in result_list]
+        return result_list
 
-        return result_list 
+    def prune_input_output(self, main_program):
+        feeded_vars, feeded_var_names= self.get_inout_spec(self.program.inputs, self.input_spec, True)
+        target_vars = self.get_inout_spec(self.program.outputs, self.output_spec)
+        main_program = main_program.clone()
+        global_block = main_program.global_block()
+        need_to_remove_op_index = []
+        for i, op in enumerate(global_block.ops):
+            op.desc.set_is_target(False)
+            if op.type == "feed" or op.type == "fetch":
+                need_to_remove_op_index.append(i)
 
-    def generate_output_spec_by_order(self, all_vars, target_vars):
-        result_list = []
-        if isinstance(target_vars, dict):
-            order_vars = OrderedDict(target_vars)
-            for i, name in order_vars.items():
-                result_list.append(all_vars[i])
-        if isinstance(target_vars, list):
-            for i in target_vars:
-                result_list.append(all_vars[i])
-        else:
-            valid_vars = [var for var in all_vars if isinstance(var, Variable)]
-            result_list = valid_vars
-        return result_list 
+        for index in need_to_remove_op_index[::-1]:
+            global_block._remove_op(index)
 
-    def prune_input_output(self):
-        input_var_names = self.generate_input_spec_by_name(self.program.inputs, self.input_spec, True)
-        output_vars = self.generate_output_spec_by_order(self.program.outputs, self.output_spec)
-        self.program.main_program = self.program.main_program._prune_with_input(
-        feeded_var_names=input_var_names, targets=output_vars)
-        self.program.main_program = self.program.main_program._inference_optimize(prune_read_op=True)
-        output_var_names = [v.name for v in output_vars]
-        prepend_feed_ops(self.program.main_program, input_var_names)
-        append_fetch_ops(self.program.main_program, output_var_names) 
-        self.program.outputs = tuple(output_vars) 
+        main_program.desc.flush()
+
+        main_program = main_program._prune_with_input(
+            feeded_var_names=feeded_var_names, targets=target_vars)
+        main_program = main_program._inference_optimize(prune_read_op=True)
+        fetch_var_names = [v.name for v in target_vars]
+
+        prepend_feed_ops(main_program, feeded_var_names)
+        append_fetch_ops(main_program, fetch_var_names)
+
+        self.program.outputs = tuple(target_vars) 
+        self.program.inputs = tuple(feeded_vars) 
+        return main_program
 
     @switch_to_static_graph
-    def to_static_program(self):
+    def to_static_program(self, prune_iout=False):
         paddle.jit.set_verbosity(10)
         if isinstance(self.model, TranslatedLayer):
             # TODO 待提供concrete_program的接口
-            concrete_program  =  self.model._program_holder_dict['forward'].infer_program
+            concrete_program  =  self.model.program()
         elif isinstance(self.model, Layer):
             if isinstance(self.model.forward, StaticLayer):
-                concrete_program, _ = self.model.forward.get_concrete_program(*self.input_spec)
+                #concrete_program, _ = self.model.forward.get_concrete_program(*self.input_spec)
+                concrete_program  = self.model.forward.concrete_program
             elif inspect.ismethod(self.model.forward):
                 concrete_program, _ = declarative(self.model.forward).get_concrete_program(*self.input_spec)
             else: 
@@ -157,4 +143,6 @@ class StaticGraph():
                 "The input model should be 'Layer','StaticLayer' or 'TranslatedLayer', but received layer type is %s."
                 % type(self.model))
         self.program = concrete_program
-        self.prune_input_output()
+        if prune_iout: 
+            self.program.main_program = self.prune_input_output(self.program.main_program.clone())
+

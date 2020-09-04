@@ -116,12 +116,13 @@ class Converter(object):
             graph, producer_name='X2Paddle', opset_imports=opset_imports)
         onnx.checker.check_model(model)
 
-        if not os.path.isdir(save_dir):
-            os.makedirs(save_dir)
-        with open(os.path.join(save_dir, 'paddle2onnx_model.onnx'), 'wb') as f:
+        path, file_name = os.path.split(save_dir)
+        if path != '' and not os.path.isdir(path):
+            os.makedirs(path)
+        with open(save_dir, 'wb') as f:
             f.write(model.SerializeToString())
         print("\nTranslated model saved in {}".format(
-            os.path.join(save_dir, 'paddle2onnx_model.onnx')))
+            save_dir))
 
     def import_ops_with_opset_version(self, opset_version=9):
         run_opset = self.default_opset
