@@ -47,21 +47,21 @@ def arg_parser():
     return parser
 
 
-def dynamic_graph_onnx(model, input_spec, save_dir, output_spec=None, prune_iout=False, opset_version=9, **kwargs):
+def convert_dygraph(model, save_dir, input_spec=None, configs=None, opset_version=9):
     from .static_graph.graph import StaticGraph
     from .converter.convert import Converter
     import paddle.fluid as fluid
-    static_graph = StaticGraph(model, input_spec=input_spec, output_spec=output_spec, prune_iout=prune_iout, **kwargs)
+    static_graph = StaticGraph(model, input_spec=input_spec, configs=configs)
     converter = Converter()
     converter.convert(
-        static_graph.program,
+        static_graph.get_concrete_program(),
         save_dir,
         opset_version=opset_version)
 
-def serializable_dynamic_graph_onnx():
+def convert_translated_layer():
     pass 
 
-def program_onnx():
+def convert_program():
     pass 
 
 def main():
@@ -98,9 +98,9 @@ def main():
 
     assert args.model is not None, "--model should be defined while translating paddle model to onnx"
     if args.model:
-        serializable_dynamic_graph_onnx(args.model, args.save_dir, opset_version=args.onnx_opset)
+        convert_translated_layer(args.model, args.save_dir, opset_version=args.onnx_opset)
     else:
-        program_onnx(args.model, args.save_dir, opset_version=args.onnx_opset)
+        convert_program(args.model, args.save_dir, opset_version=args.onnx_opset)
 
 if __name__ == "__main__":
     main()

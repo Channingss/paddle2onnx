@@ -63,11 +63,14 @@ def append_fetch_ops(inference_program,
 
 class StaticGraph():
     def __init__(self,
-                 model,
+                 layer,
                  input_spec,
-                 output_spec=None,
-                 prune_iout=False):
-        self.program = self.to_static_program(model, input_spec, output_spec, prune_iout)
+                 configs=None):
+        self.layer = layer
+        self.input_spec = input_spec
+        self.output_spec = None
+        if configs is not None:
+            self.output_spec = configs.output_spec
 
     def get_inout_spec(self, all_vars, target_vars, return_name=False):
         result_list = []
@@ -119,31 +122,30 @@ class StaticGraph():
         return concrete_program
 
     @switch_to_static_graph
-    def to_static_program(self, model, input_spec, out_spec, prune_iout=False):
+    def get_concrete_program(self):
         paddle.jit.set_verbosity(10)
-        if isinstance(model, Layer):
-            if isinstance(model.forward, StaticLayer):
-                concrete_program  = model.forward.concrete_program
-            elif inspect.ismethod(model.forward):
-                concrete_program, _ = declarative(model.forward).get_concrete_program(*input_spec)
+        if isinstance(self.layer, Layer):
+            if isinstance(self.layer.forward, StaticLayer):
+                concrete_program  = self.layer.forward.concrete_program
+                #concrete_program, _ = declarative(model.forward).get_concrete_program(*input_spec)
             else: 
                 raise TypeError(
-                    "The foward of model should be 'Function' or 'StaticLayer', but received forward type is %s."
-                    % type(model.forward))
-        elif isinstance(model, StaticLayer):
-            concrete_program  = model.concrete_program
+                    "The foward of layer should be StaticLayer, but received forward type is %s."
+                    % type(self.layer.forward))
+        elif isinstance(self.layer, StaticLayer):
+            concrete_program  = self.layer.concrete_program
             #concrete_program, _ = model.get_concrete_program(*input_spec)
         else:
             raise TypeError(
-                "The input model should be 'Layer' or 'StaticLayer', but received  type is %s."
-                % type(model))
-        if prune_iout: 
-            if isinstance(model, StaticLayer) or isinstance(model.forward, StaticLayer):
-                concrete_program = self.prune_input_output(concrete_program)
-            else:
-                #TODO
-                raise TypeError(
-                    "The  model should be staticed, please use api: to static model.") 
+                "The input Layer should be 'Layer' or 'StaticLayer', but received  type is %s."
+                % type(self.layer))
+
+        if isinstance(self.layer, StaticLayer) or isinstance(self.layer.forward, StaticLayer):
+            concrete_program = self.prune_input_output(concrete_program, self.input_spec, self.output_spec)
+        else:
+            #TODO
+            raise TypeError(
+                "The Layer should be staticed, please use api: to static model.") 
 
         return concrete_program
 

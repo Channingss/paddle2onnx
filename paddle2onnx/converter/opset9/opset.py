@@ -97,7 +97,7 @@ def leaky_relu(op, block):
         alpha=op.attr('alpha'))
     return node
 
-def elementwise_add(op, block):
+def _elementwise_ops(op, block, op_type):
     axis = op.attr('axis')
     x_shape = block.var(op.input('X')[0]).shape
     y_shape = block.var(op.input('Y')[0]).shape
@@ -113,49 +113,31 @@ def elementwise_add(op, block):
             inputs=[op.input('Y')[0], shape_name],
             outputs=[temp_value])
         node = helper.make_node(
-            'Add',
+            op_type,
             inputs=[op.input('X')[0], temp_value],
             outputs=op.output('Out'))
         return [shape_node, y_node, node]
     elif axis == -1 or axis == (len(x_shape) - 1
                                 ) or len(x_shape) == len(y_shape):
         node = helper.make_node(
-            'Add',
+            op_type,
             inputs=[op.input('X')[0], op.input('Y')[0]],
             outputs=op.output('Out'))
         return node
     else:
-        raise Exception("Unexpected situation happend in elementwise_add")
+        raise Exception("Unexpected situation happend in elementwise_{}".format(lower(op_type)))
+
+def elementwise_add(op, block):
+    return _elementwise_ops(op, block, 'Add')
 
 def elementwise_sub(op, block):
-    axis = op.attr('axis')
-    x_shape = block.var(op.input('X')[0]).shape
-    y_shape = block.var(op.input('Y')[0]).shape
-    if len(y_shape) == 1 and axis == 1:
-        shape_name = get_name(op.type, 'shape')
-        shape_value = [1] * len(x_shape)
-        shape_value[axis] = y_shape[0]
-        shape_node = make_constant_node(
-            shape_name, onnx_pb.TensorProto.INT64, shape_value)
-        temp_value = get_name(op.type, 'temp')
-        y_node = helper.make_node(
-            'Reshape',
-            inputs=[op.input('Y')[0], shape_name],
-            outputs=[temp_value])
-        node = helper.make_node(
-            'Sub',
-            inputs=[op.input('X')[0], temp_value],
-            outputs=op.output('Out'))
-        return [shape_node, y_node, node]
-    elif axis == -1 or axis == (len(x_shape) - 1
-                                ) or len(x_shape) == len(y_shape):
-        node = helper.make_node(
-            'Sub',
-            inputs=[op.input('X')[0], op.input('Y')[0]],
-            outputs=op.output('Out'))
-        return node
-    else:
-        raise Exception("Unexpected situation happend in elementwise_sub")
+    return _elementwise_ops(op, block, 'Sub')
+
+def elementwise_div(op, block):
+    return _elementwise_ops(op, block, 'Div')
+
+def elementwise_mul(op, block):
+    return _elementwise_ops(op, block, 'Mul')
 
 def pool2d(op, block):
     pool_type = {
@@ -603,53 +585,23 @@ def hard_swish(op, block):
         'Div', inputs=[name2, scale_name], outputs=op.output('Out'))
     return [scale_node, offset_node, node0, node1, node2, node3]
 
-def elementwise_mul(op, block):
-    axis = op.attr('axis')
-    x_shape = block.var(op.input('X')[0]).shape
-    y_shape = block.var(op.input('Y')[0]).shape
-    if len(y_shape) == 1 and axis == 1:
-        shape_name = get_name(op.type, 'shape')
-        shape_value = [1] * len(x_shape)
-        shape_value[axis] = y_shape[0]
-        shape_node = make_constant_node(
-            shape_name, onnx_pb.TensorProto.INT64, shape_value)
-        temp_value = get_name(op.type, 'temp')
-        y_node = helper.make_node(
-            'Reshape',
-            inputs=[op.input('Y')[0], shape_name],
-            outputs=[temp_value])
-        node = helper.make_node(
-            'Mul',
-            inputs=[op.input('X')[0], temp_value],
-            outputs=op.output('Out'))
-        return [shape_node, y_node, node]
-    elif axis == -1 or axis == (len(x_shape) - 1
-                                ) or len(x_shape) == len(y_shape):
-        node = helper.make_node(
-            'Mul',
-            inputs=[op.input('X')[0], op.input('Y')[0]],
-            outputs=op.output('Out'))
-        return node
-    else:
-        raise Exception("Unexpected situation happend in elementwise_mul")
-    return node
-def feed(op, block):
-    name = op.output('Out')[0]
-    var = block.var(name)
-    tensor_info = helper.make_tensor_value_info(
-        name=name,
-        shape=var.shape,
-        elem_type=DTYPE_MAP[var.dtype])
-    return tensor_info
-
-def fetch(op, block):
-    name = op.input('X')[0]
-    var = block.var(name)
-    tensor_info = helper.make_tensor_value_info(
-        name=name,
-        shape=var.shape,
-        elem_type=DTYPE_MAP[var.dtype])
-    return tensor_info
+#def feed(op, block):
+#    name = op.output('Out')[0]
+#    var = block.var(name)
+#    tensor_info = helper.make_tensor_value_info(
+#        name=name,
+#        shape=var.shape,
+#        elem_type=DTYPE_MAP[var.dtype])
+#    return tensor_info
+#
+#def fetch(op, block):
+#    name = op.input('X')[0]
+#    var = block.var(name)
+#    tensor_info = helper.make_tensor_value_info(
+#        name=name,
+#        shape=var.shape,
+#        elem_type=DTYPE_MAP[var.dtype])
+#    return tensor_info
 
 def feed(var, block=None):
     tensor_info = helper.make_tensor_value_info(
