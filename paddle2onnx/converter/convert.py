@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import absolute_import
 import math
 import sys
 import paddle2onnx
@@ -31,14 +32,16 @@ class Converter(object):
         self.name_counter = dict()
         self.op_set = None
 
-    def convert_weights(self, concrete_program):
+    def convert_weights(self, parameters):
         nodes = list()
-        for param in concrete_program.parameters:
+        for param in parameters:
             if param.name.endswith('feed') or param.name.endswith('fetch'):
                 continue
             if not param.persistable:
                 continue
             weight = np.array(param.value().get_tensor())
+            if param.name == 'fc10_offset':
+                print(weight)
             tensor = helper.make_tensor(
                 name=param.name,
                 dims=param.shape,
@@ -49,9 +52,9 @@ class Converter(object):
             nodes.append(node)
         return nodes
 
-    def convert_inputs(self, concrete_program):
+    def convert_inputs(self, inputs):
         input_nodes = []
-        for ipt in concrete_program.inputs:
+        for ipt in inputs:
             if isinstance(ipt, fluid.Variable):
                 input_nodes.append(getattr(self.op_set, 'feed')(ipt))
             if isinstance(ipt, dict):
@@ -59,17 +62,19 @@ class Converter(object):
                     input_nodes.append(getattr(self.op_set, 'feed')(var))
         return input_nodes 
 
-    def convert_outputs(self, concrete_program):
+    def convert_outputs(self, outputs):
         output_nodes = []
-        for opt in concrete_program.outputs:
+        for opt in outputs:
             if isinstance(opt, fluid.Variable):
                 output_nodes.append(getattr(self.op_set, 'fetch')(opt))
         return output_nodes
 
-    def convert_ops(self, concrete_program):
+    def convert_ops(self, program):
         op_nodes = list()
+        input_nodes = list()
+        output_nodes = list()
         unsupported_ops = set()
-        for block in concrete_program.main_program.blocks:
+        for block in program.blocks:
             for i, op in enumerate(block.ops):
                 sys.stdout.write("\rTotal:{}, Current:{} : {} ".format(
                     len(block.ops), i + 1, op.type))
@@ -79,7 +84,12 @@ class Converter(object):
                     continue
                 if len(unsupported_ops) > 0:
                     continue
-                if op.type in ['feed', 'fetch']:
+                #node = getattr(self.op_set, op.type)(op, block)
+                if op.type == 'feed':
+                    #input_nodes.append(node)
+                    continue
+                if op.type == 'fetch':
+                    #output_nodes.append(node)
                     continue
                 node = getattr(self.op_set, op.type)(op, block)
                 if isinstance(node, list):
@@ -92,36 +102,39 @@ class Converter(object):
             for op in unsupported_ops:
                 unsupported_ops_string += "=========== {} ===========\n".format(op)
             raise ValueError(unsupported_ops_string)
-        return op_nodes
+        return op_nodes#, input_nodes, output_nodes 
 
     @switch_to_static_graph
-    def convert(self, concrete_program, save_dir, opset_version=9):
-        program = concrete_program.main_program.clone()
+    def convert(self, graph, opset_version=9):
+        program = graph.program.clone()
         self.op_set = self.import_ops_with_opset_version(opset_version)
 
-        print("Translating PaddlePaddle to ONNX...\n")
-        input_nodes = self.convert_inputs(concrete_program)
-        output_nodes = self.convert_outputs(concrete_program)
-        weight_nodes = self.convert_weights(concrete_program)
-        op_nodes = self.convert_ops(concrete_program)
+        print("Converting PaddlePaddle to ONNX...\n")
+        input_nodes = self.convert_inputs(graph.inputs)
+        output_nodes = self.convert_outputs(graph.outputs)
+        weight_nodes = self.convert_weights(graph.parameters)
+        op_nodes = self.convert_ops(program)
 
         graph = helper.make_graph(
             nodes=weight_nodes + op_nodes,
-            name='onnx_model_from_paddle',
+            name='paddle.onnx',
             initializer=[],
             inputs=input_nodes,
             outputs=output_nodes)
         opset_imports = [helper.make_opsetid("", opset_version)]
         model = helper.make_model(
-            graph, producer_name='X2Paddle', opset_imports=opset_imports)
+            graph, producer_name='PaddlePaddle', opset_imports=opset_imports)
         onnx.checker.check_model(model)
 
+        return model
+
+    def save(self, model, save_dir):
         path, file_name = os.path.split(save_dir)
         if path != '' and not os.path.isdir(path):
             os.makedirs(path)
         with open(save_dir, 'wb') as f:
             f.write(model.SerializeToString())
-        print("\nTranslated model saved in {}".format(
+        print("\nONNX model saved in {}".format(
             save_dir))
 
     def import_ops_with_opset_version(self, opset_version=9):

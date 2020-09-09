@@ -559,7 +559,7 @@ def yolo_box(op, block):
     outputs_pred_box_mul_conf = [model_name + "@pred_box_mul_conf"]
     node_pred_box_mul_conf = onnx.helper.make_node(
         'Mul',
-        inputs=outputs_pred_box + outputs_conf_cast,
+        inputs=outputs_conf_cast + outputs_pred_box,
         outputs=outputs_pred_box_mul_conf)
     node_list.append(node_pred_box_mul_conf)
 

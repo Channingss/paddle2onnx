@@ -177,7 +177,7 @@ def bilinear_interp(op, block):
                 'Resize',
                 inputs=[op.input('X')[0], roi_name, scale_name],
                 outputs=op.output('Out'),
-                mode='nearest',
+                mode='linear',
                 coordinate_transformation_mode=coordinate_transformation_mode
             )
             return [scale_node, roi_node, node]
@@ -196,13 +196,73 @@ def nearest_interp(op, block):
     roi_name = get_name(op.type, 'roi')
     roi_node = make_constant_node(roi_name, onnx_pb.TensorProto.FLOAT,
                                        [1, 1, 1, 1, 1, 1, 1, 1])
-    if 'OutSize' in input_names and len(op.input('OutSize')) > 0:
-        node = helper.make_node(
+
+    if ('OutSize' in input_names and len(op.input('OutSize')) > 0) or (
+            'SizeTensor' in input_names and
+            len(op.input('SizeTensor')) > 0):
+        node_list = list()
+        empty_name = get_name(op.type, 'empty')
+        empty_tensor = helper.make_tensor(
+            empty_name,
+            onnx_pb.TensorProto.FLOAT, (0, ),
+            np.array([]).astype('float32'),
+            raw=False)
+        empty_node = helper.make_node(
+            'Constant', [], outputs=[empty_name], value=empty_tensor)
+        shape_name0 = get_name(op.type, 'shape')
+        shape_node0 = helper.make_node(
+            'Shape', inputs=op.input('X'), outputs=[shape_name0])
+        starts_name = get_name(op.type, 'slice.starts')
+        starts_node = make_constant_node(
+            starts_name, onnx_pb.TensorProto.INT64, [0])
+        ends_name = get_name(op.type, 'slice.ends')
+        ends_node = make_constant_node(ends_name,
+                                            onnx_pb.TensorProto.INT64, [2])
+        shape_name1 = get_name(op.type, 'shape')
+        shape_node1 = helper.make_node(
+            'Slice',
+            inputs=[shape_name0, starts_name, ends_name],
+            outputs=[shape_name1])
+        node_list.extend([
+            roi_node, empty_node, shape_node0, starts_node, ends_node,
+            shape_node1
+        ])
+        if 'OutSize' in input_names and len(op.input('OutSize')) > 0:
+            cast_shape_name = get_name(op.type, "shape.cast")
+            cast_shape_node = helper.make_node(
+                'Cast',
+                inputs=op.input('OutSize'),
+                outputs=[cast_shape_name],
+                to=onnx_pb.TensorProto.INT64)
+            node_list.append(cast_shape_node)
+        else:
+            concat_shape_name = get_name(op.type, "shape.concat")
+            concat_shape_node = helper.make_node(
+                "Concat",
+                inputs=op.input('SizeTensor'),
+                outputs=[concat_shape_name],
+                axis=0)
+            cast_shape_name = get_name(op.type, "shape.cast")
+            cast_shape_node = helper.make_node(
+                'Cast',
+                inputs=[concat_shape_name],
+                outputs=[cast_shape_name],
+                to=onnx_pb.TensorProto.INT64)
+            node_list.extend([concat_shape_node, cast_shape_node])
+        shape_name3 = get_name(op.type, "shape.concat")
+        shape_node3 = helper.make_node(
+            'Concat',
+            inputs=[shape_name1, cast_shape_name],
+            outputs=[shape_name3],
+            axis=0)
+        result_node = helper.make_node(
             'Resize',
-            inputs=[op.input('X')[0], roi_name, op.input('OutSize')[0]],
+            inputs=[op.input('X')[0], roi_name, empty_name, shape_name3],
             outputs=op.output('Out'),
             mode='nearest',
             coordinate_transformation_mode=coordinate_transformation_mode)
+        node_list.extend([shape_node3, result_node])
+        return node_list
     elif 'Scale' in input_names and len(op.input('Scale')) > 0:
         node = helper.make_node(
             'Resize',

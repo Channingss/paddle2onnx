@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import absolute_import
 import setuptools
-import fluid_onnx
+#import paddle2onnx 
 
 long_description = "paddle-onnx is a toolkit for converting trained model to onnx from PaddlePaddle framework.\n\n"
 long_description += "Usage: paddle2onnx --fluid_model src --onnx_model dist  --debug --image_path dataset\n"
@@ -37,4 +38,4 @@ setuptools.setup(
     "Operating System :: OS Independent",
     ],
     license='Apache 2.0',
-    entry_points={'console_scripts': ['paddle2onnx=fluid_onnx.fluid_to_onnx:main']})
+    entry_points={'console_scripts': ['paddle2onnx=paddle2onnx.export:main']})

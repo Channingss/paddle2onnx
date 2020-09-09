@@ -14,6 +14,7 @@
 
 # TODO useless node remove
 
+from __future__ import absolute_import
 
 class ONNXOptimizer(object):
     def __init__(self, op_mapper):

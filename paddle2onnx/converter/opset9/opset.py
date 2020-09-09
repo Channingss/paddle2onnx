@@ -125,7 +125,7 @@ def _elementwise_ops(op, block, op_type):
             outputs=op.output('Out'))
         return node
     else:
-        raise Exception("Unexpected situation happend in elementwise_{}".format(lower(op_type)))
+        raise Exception("Unexpected situation happend in elementwise_{}".format(op_type.lower()))
 
 def elementwise_add(op, block):
     return _elementwise_ops(op, block, 'Add')
@@ -238,13 +238,18 @@ def scale(op, block):
         bias_name = get_name(op.type, 'bias')
         scale_node = make_constant_node(
             scale_name, onnx_pb.TensorProto.FLOAT, scale)
-        bias_node = make_constant_node(bias_name,
-                                            onnx_pb.TensorProto.FLOAT, bias)
+        bias_node = make_constant_node(bias_name, onnx_pb.TensorProto.FLOAT, bias)
         temp_tensor_name = get_name(op.type, 'temporary')
+        node_cast_name = get_name(op.type, 'cast')
+        node_cast = helper.make_node(
+            'Cast',
+            inputs=op.input('X'),
+            outputs=[node_cast_name],
+            to=onnx_pb.TensorProto.FLOAT)
         if op.attr('bias_after_scale'):
             node1 = helper.make_node(
                 'Mul',
-                inputs=[scale_name, op.input('X')[0]],
+                inputs=[scale_name, node_cast_name],
                 outputs=[temp_tensor_name])
             node2 = helper.make_node(
                 'Add',
@@ -253,13 +258,13 @@ def scale(op, block):
         else:
             node1 = helper.make_node(
                 'Add',
-                inputs=[bias_name, op.input('X')[0]],
+                inputs=[bias_name, node_cast_name],
                 outputs=temp_tensor_name)
             node2 = helper.make_node(
                 'Mul',
                 inputs=[scale_name, temp_tensor_name],
                 outputs=[op.output('Out')])
-        return [scale_node, bias_node, node1, node2]
+        return [scale_node, bias_node, node_cast, node1, node2]
 
 def mul(op, block):
     x_shape = block.var(op.input('X')[0]).shape
