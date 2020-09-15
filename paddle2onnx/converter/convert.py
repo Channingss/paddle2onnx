@@ -22,7 +22,7 @@ import paddle.fluid as fluid
 import onnx
 from onnx import helper, onnx_pb
 from paddle.fluid.dygraph.base import program_desc_tracing_guard, switch_to_static_graph
-from .utils import DTYPE_MAP
+from .utils import DTYPE_PADDLE_ONNX_MAP
 
 
 class Converter(object):
@@ -47,7 +47,7 @@ class Converter(object):
             tensor = helper.make_tensor(
                 name=param.name,
                 dims=param.shape,
-                data_type=DTYPE_MAP[param.dtype],
+                data_type=DTYPE_PADDLE_ONNX_MAP[param.dtype],
                 vals=weight.flatten().tolist())
             node = helper.make_node(
                 'Constant', inputs=[], outputs=[param.name], value=tensor)

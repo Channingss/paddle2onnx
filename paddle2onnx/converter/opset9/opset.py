@@ -20,7 +20,7 @@ import paddle.fluid.core as core
 import paddle.fluid as fluid
 import onnx
 from onnx import helper, onnx_pb
-from ..utils import DTYPE_MAP, DTYPE_NUMPY_MAP, get_name, make_constant_node
+from ..utils import DTYPE_PADDLE_ONNX_MAP, DTYPE_ONNX_NUMPY_MAP, get_name, make_constant_node
 
 
 def conv2d(op, block):
@@ -373,7 +373,7 @@ def uniform_random_batch_size_like(op, block):
         inputs=op.input('Input'),
         outputs=op.output('Out'),
         high=op.attr('max'),
-        dtype=DTYPE_MAP[op.attr('dtype')],
+        dtype=DTYPE_PADDLE_ONNX_MAP[op.attr('dtype')],
         low=op.attr('min'),
         seed=float(op.attr('seed')), )
     return node
@@ -437,14 +437,14 @@ def fill_constant(op, block):
     dtype = op.attr('dtype')
     shape = op.attr('shape')
     value = np.ones(shape) * value
-    value = value.astype(DTYPE_NUMPY_MAP[dtype])
+    value = value.astype(DTYPE_ONNX_NUMPY_MAP[dtype])
     node = helper.make_node(
         'Constant',
         inputs=[],
         outputs=op.output('Out'),
         value=helper.make_tensor(
             name=op.output('Out')[0],
-            data_type=DTYPE_MAP[dtype],
+            data_type=DTYPE_PADDLE_ONNX_MAP[dtype],
             dims=shape,
             vals=value.tolist()))
     return node
@@ -620,7 +620,7 @@ def hard_swish(op, block):
 #    tensor_info = helper.make_tensor_value_info(
 #        name=name,
 #        shape=var.shape,
-#        elem_type=DTYPE_MAP[var.dtype])
+#        elem_type=DTYPE_PADDLE_ONNX_MAP[var.dtype])
 #    return tensor_info
 #
 #def fetch(op, block):
@@ -629,19 +629,23 @@ def hard_swish(op, block):
 #    tensor_info = helper.make_tensor_value_info(
 #        name=name,
 #        shape=var.shape,
-#        elem_type=DTYPE_MAP[var.dtype])
+#        elem_type=DTYPE_PADDLE_ONNX_MAP[var.dtype])
 #    return tensor_info
 
 
 def feed(var, block=None):
     tensor_info = helper.make_tensor_value_info(
-        name=var.name, shape=var.shape, elem_type=DTYPE_MAP[var.dtype])
+        name=var.name,
+        shape=var.shape,
+        elem_type=DTYPE_PADDLE_ONNX_MAP[var.dtype])
     return tensor_info
 
 
 def fetch(var, block=None):
     tensor_info = helper.make_tensor_value_info(
-        name=var.name, shape=var.shape, elem_type=DTYPE_MAP[var.dtype])
+        name=var.name,
+        shape=var.shape,
+        elem_type=DTYPE_PADDLE_ONNX_MAP[var.dtype])
     return tensor_info
 
 
@@ -659,7 +663,7 @@ def cast(op, block):
         'Cast',
         inputs=op.input('X'),
         outputs=op.output('Out'),
-        to=DTYPE_MAP[op.attr('out_dtype')])
+        to=DTYPE_PADDLE_ONNX_MAP[op.attr('out_dtype')])
     return node
 
 

@@ -20,7 +20,7 @@ import paddle.fluid.core as core
 import paddle.fluid as fluid
 import onnx
 from onnx import helper, onnx_pb
-from ..utils import DTYPE_MAP, get_name, make_constant_node
+from ..utils import DTYPE_PADDLE_ONNX_MAP, get_name, make_constant_node
 from ..opset9.opset import *
 
 

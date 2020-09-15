@@ -16,6 +16,7 @@ from __future__ import absolute_import
 from six import text_type as _text_type
 import argparse
 import sys
+import os
 
 from paddle2onnx.graph import StaticGraph
 from paddle2onnx.converter import Converter
@@ -73,7 +74,12 @@ def export_dygraph(layer,
     onnx_model = converter.convert(static_graph)
     optimizer = GraphOptimizer()
     optimizer.optimize(onnx_model)
-    utils.save_onnx_model(onnx_model, save_dir)
+    path, file_name = os.path.split(save_dir)
+    if path != '' and not os.path.isdir(path):
+        os.makedirs(path)
+    with open(save_dir, 'wb') as f:
+        f.write(onnx_model.SerializeToString())
+    print("\nONNX model saved in {}".format(save_dir))
 
 
 def export_program():

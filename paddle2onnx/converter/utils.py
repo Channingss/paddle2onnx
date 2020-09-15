@@ -27,7 +27,7 @@ import paddle.fluid as fluid
 import onnx
 from onnx import helper, onnx_pb
 
-DTYPE_MAP = {
+DTYPE_PADDLE_ONNX_MAP = {
     core.VarDesc.VarType.FP32: onnx_pb.TensorProto.FLOAT,
     core.VarDesc.VarType.FP64: onnx_pb.TensorProto.DOUBLE,
     core.VarDesc.VarType.INT32: onnx_pb.TensorProto.INT32,
@@ -37,7 +37,7 @@ DTYPE_MAP = {
     core.VarDesc.VarType.BOOL: onnx_pb.TensorProto.BOOL,
 }
 
-DTYPE_NUMPY_MAP = {
+DTYPE_ONNX_NUMPY_MAP = {
     core.VarDesc.VarType.FP32: 'float32',
     core.VarDesc.VarType.FP64: 'float64',
     core.VarDesc.VarType.INT32: 'int32',
