@@ -17,7 +17,7 @@ from six import text_type as _text_type
 import argparse
 import sys
 
-from paddle2onnx.graph import PaddleGraph
+from paddle2onnx.graph import StaticGraph
 from paddle2onnx.converter import Converter
 from paddle2onnx.optimizer import GraphOptimizer
 from paddle2onnx import utils 
@@ -60,9 +60,12 @@ def arg_parser():
 
 
 def export_dygraph(layer, save_dir, input_spec=None, configs=None, opset_version=9):
-    paddle_graph = PaddleGraph(layer, input_spec=input_spec, configs=configs)
+    output_spec = None
+    if configs is not None:
+        output_spec = configs.output_spec
+    static_graph = StaticGraph.parse_graph(layer, input_spec, output_spec)
     converter = Converter(opset_version)
-    onnx_model = converter.convert(paddle_graph)
+    onnx_model = converter.convert(static_graph)
     optimizer = GraphOptimizer()
     optimizer.optimize(onnx_model)
     utils.save_onnx_model(onnx_model, save_dir)
