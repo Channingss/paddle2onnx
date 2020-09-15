@@ -14,7 +14,6 @@
 
 from __future__ import absolute_import
 import setuptools
-#import paddle2onnx 
 
 long_description = "paddle-onnx is a toolkit for converting trained model to onnx from PaddlePaddle framework.\n\n"
 long_description += "Usage: paddle2onnx --fluid_model src --onnx_model dist  --debug --image_path dataset\n"
