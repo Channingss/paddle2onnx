@@ -150,7 +150,7 @@ def debug_model(op_list, op_trackers, nms_outputs, args):
 
     feed_var_name = args.name_prefix + "feed"
     fetch_var_name = args.name_prefix + "fetch"
-    # start check the op test 
+    # start check the op test
     print("--------------------START CHECK TEST OPS!---------------------")
     for op_name in op_list:
         print("start check the op: %s" % (op_name))
@@ -161,7 +161,7 @@ def debug_model(op_list, op_trackers, nms_outputs, args):
             raise Exception("The op %s test check failed!" % (op_name))
     print("----------------------CHECK TEST OPS OK!-----------------------")
 
-    # In some tools, examples(Tf2ONNX, Caffe2ONNX), therse tools just check the last layer output, 
+    # In some tools, examples(Tf2ONNX, Caffe2ONNX), therse tools just check the last layer output,
     # we will check all layers output. Just ensure the robustness of Paddle2ONNX
     # start check the output of op
     print("--------------------START CHECK OPS OUTPUT!--------------------")
@@ -178,8 +178,8 @@ def debug_model(op_list, op_trackers, nms_outputs, args):
         fluid_intermedidate_target_names.extend(outputs)
 
     #fluid_intermedidate_target_names = fluid_intermedidate_target_names[:]
-    # load the paddle and onnx model 
-    # init the fluid executor 
+    # load the paddle and onnx model
+    # init the fluid executor
 
     place = fluid.CPUPlace()
     exe = fluid.Executor(place)
@@ -195,16 +195,16 @@ def debug_model(op_list, op_trackers, nms_outputs, args):
     fetch_target_names = [target.name for target in fetch_targets]
     fluid_intermedidate_target_names = []
     fluid_intermedidate_target_names.extend(fetch_target_names)
-    # in this section, wo will set the varaiable we want to get 
+    # in this section, wo will set the varaiable we want to get
     global_block = fluid_infer_program.global_block()
 
     fetch_list = [global_block.var(name) for name in fluid_intermedidate_target_names\
                  if global_block.has_var(name)]
     fluid_intermedidate_target_names = [var.name for var in fetch_list]
 
-    # load the onnx model and init the onnx executor  
+    # load the onnx model and init the onnx executor
     onnx_model = load(args.onnx_model)
-    # user define the fetch list 
+    # user define the fetch list
     onnx_model = onnx_user_define_fetch_list(onnx_model, global_block,
                                              fluid_intermedidate_target_names)
     user_define_fetch_list(fluid_infer_program,

@@ -1,3 +1,17 @@
+#   Copyright (c) 2020 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from __future__ import absolute_import
 import os
 import pickle
@@ -7,12 +21,12 @@ import inspect
 import paddle
 import paddle.jit as jit
 import paddle.fluid.core as core
-import paddle.fluid.dygraph.base as base 
+import paddle.fluid.dygraph.base as base
 import paddle.fluid.dygraph.dygraph_to_static.program_translator as program_translator
-import paddle.fluid.dygraph.layers as  layers
-import paddle.fluid.dygraph.io as io 
+import paddle.fluid.dygraph.layers as layers
+import paddle.fluid.dygraph.io as io
 from paddle.fluid.framework import Variable
-import paddle.fluid as fluid 
+import paddle.fluid as fluid
 
 
 def prepend_feed_ops(inference_program,
@@ -42,6 +56,7 @@ def prepend_feed_ops(inference_program,
             outputs={'Out': [out]},
             attrs={'col': i})
 
+
 def append_fetch_ops(inference_program,
                      fetch_target_names,
                      fetch_holder_name='fetch'):
@@ -58,8 +73,10 @@ def append_fetch_ops(inference_program,
             outputs={'Out': [fetch_var]},
             attrs={'col': i})
 
+
 def prune_input_output(concrete_program, input_spec, output_spec):
-    feeded_vars, feeded_var_names= get_inout_spec(concrete_program.inputs, input_spec, True)
+    feeded_vars, feeded_var_names = get_inout_spec(concrete_program.inputs,
+                                                   input_spec, True)
     target_vars = get_inout_spec(concrete_program.outputs, output_spec)
     main_program = concrete_program.main_program.clone()
     global_block = main_program.global_block()
@@ -83,11 +100,12 @@ def prune_input_output(concrete_program, input_spec, output_spec):
     prepend_feed_ops(main_program, feeded_var_names)
     append_fetch_ops(main_program, fetch_var_names)
 
-    concrete_program.outputs = tuple(target_vars) 
-    concrete_program.inputs = tuple(feeded_vars) 
+    concrete_program.outputs = tuple(target_vars)
+    concrete_program.inputs = tuple(feeded_vars)
     concrete_program.main_program = main_program
 
     return concrete_program
+
 
 @base.switch_to_static_graph
 def get_concrete_program(layer):
@@ -95,7 +113,7 @@ def get_concrete_program(layer):
     if isinstance(layer, layers.Layer):
         if isinstance(layer.forward, program_translator.StaticLayer):
             return layer.forward.concrete_program
-        else: 
+        else:
             raise TypeError(
                 "The foward of layer should be StaticLayer, but received forward type is %s."
                 % type(layer.forward))
@@ -105,6 +123,7 @@ def get_concrete_program(layer):
         raise TypeError(
             "The input Layer should be 'Layer' or 'StaticLayer', but received  type is %s."
             % type(layer))
+
 
 def get_inout_spec(all_vars, target_vars, return_name=False):
     result_list = []
@@ -116,20 +135,20 @@ def get_inout_spec(all_vars, target_vars, return_name=False):
         for i, var in enumerate(target_vars):
             # check target var whether exists
             if var.name not in valid_var_dict:
-                raise RuntimeError(
-                    "The variable to feed/fetch are not exist.")
+                raise RuntimeError("The variable to feed/fetch are not exist.")
             result_list.append(valid_var_dict[var.name])
     else:
         result_list = valid_vars
     if return_name:
-        return result_list,  [var.name for var in result_list]
+        return result_list, [var.name for var in result_list]
     return result_list
+
 
 class StaticGraph():
     def __init__(self, program, parameters, inputs, outputs):
-        self.program = program 
+        self.program = program
         self.parameters = parameters
-        self.inputs = inputs 
+        self.inputs = inputs
         self.outputs = outputs
 
     @staticmethod
@@ -137,16 +156,19 @@ class StaticGraph():
     def parse_graph(layer, input_spec=None, output_spec=None):
         jit.set_verbosity(10)
         if isinstance(layer, io.TranslatedLayer):
-            program  = layer.program()
-            parameters = layer.parameters() 
+            program = layer.program()
+            parameters = layer.parameters()
             return StaticGraph(None, None, None, None)
-        elif isinstance(layer, layers.Layer) or isinstance(layer, program_translator.StaticLayer):
+        elif isinstance(layer, layers.Layer) or isinstance(
+                layer, program_translator.StaticLayer):
             concrete_program = get_concrete_program(layer)
-            concrete_program =  prune_input_output(concrete_program, input_spec, output_spec)
-            static_graph = StaticGraph(concrete_program.main_program, concrete_program.parameters, concrete_program.inputs, concrete_program.outputs)
+            concrete_program = prune_input_output(concrete_program, input_spec,
+                                                  output_spec)
+            static_graph = StaticGraph(
+                concrete_program.main_program, concrete_program.parameters,
+                concrete_program.inputs, concrete_program.outputs)
             return static_graph
         else:
             raise TypeError(
                 "The input Layer should be 'Layer' or 'StaticLayer', 'TranslatedLayer', but received  type is %s."
                 % type(layer))
-    

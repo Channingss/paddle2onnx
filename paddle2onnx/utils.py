@@ -14,12 +14,11 @@
 
 import os
 
+
 def save_onnx_model(onnx_model, save_dir):
     path, file_name = os.path.split(save_dir)
     if path != '' and not os.path.isdir(path):
         os.makedirs(path)
     with open(save_dir, 'wb') as f:
         f.write(onnx_model.SerializeToString())
-    print("\nONNX model saved in {}".format(
-        save_dir))
-
+    print("\nONNX model saved in {}".format(save_dir))

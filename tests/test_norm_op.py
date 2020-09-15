@@ -36,7 +36,7 @@ class TestNormOp(OpTest):
         self.inputs = {'X': x}
         self.attrs = {'epsilon': self.epsilon, 'axis': self.axis}
         self.outputs = {'Out': y, 'Norm': norm}
-        self.outputs = {'Out': y}      
+        self.outputs = {'Out': y}
 
     def test_check_output(self):
         self.check_output(is_onnxruntime=True)

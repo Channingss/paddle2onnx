@@ -252,15 +252,13 @@ def box_coder(op, block):
             'Mul', inputs=input_step1, outputs=output_step_1)
         node_list.append(node)
     if axis == 0:
-        inputs_tbxy_step2 = [
-            [outputs_tb_step1[0][0], outputs_transpose_pb[0][0]],
-            [outputs_tb_step1[1][0], outputs_transpose_pb[1][0]]
-        ]
+        inputs_tbxy_step2 = [[
+            outputs_tb_step1[0][0], outputs_transpose_pb[0][0]
+        ], [outputs_tb_step1[1][0], outputs_transpose_pb[1][0]]]
     else:
-        inputs_tbxy_step2 = [
-            [outputs_tb_step1[0][0], inputs_transpose_pb[0][0]],
-            [outputs_tb_step1[1][0], inputs_transpose_pb[1][0]]
-        ]
+        inputs_tbxy_step2 = [[
+            outputs_tb_step1[0][0], inputs_transpose_pb[0][0]
+        ], [outputs_tb_step1[1][0], inputs_transpose_pb[1][0]]]
 
     outputs_tbxy_step2 = [[result_name + "@decode_x_step2"],
                           [result_name + "@decode_y_step2"]]
@@ -271,15 +269,13 @@ def box_coder(op, block):
             'Mul', inputs=input_step2, outputs=output_step_2)
         node_list.append(node)
     if axis == 0:
-        inputs_tbxy_step3 = [
-            [outputs_tbxy_step2[0][0], outputs_transpose_pb[2][0]],
-            [outputs_tbxy_step2[1][0], outputs_transpose_pb[3][0]]
-        ]
+        inputs_tbxy_step3 = [[
+            outputs_tbxy_step2[0][0], outputs_transpose_pb[2][0]
+        ], [outputs_tbxy_step2[1][0], outputs_transpose_pb[3][0]]]
     else:
-        inputs_tbxy_step3 = [
-            [outputs_tbxy_step2[0][0], inputs_transpose_pb[2][0]],
-            [outputs_tbxy_step2[1][0], inputs_transpose_pb[3][0]]
-        ]
+        inputs_tbxy_step3 = [[
+            outputs_tbxy_step2[0][0], inputs_transpose_pb[2][0]
+        ], [outputs_tbxy_step2[1][0], inputs_transpose_pb[3][0]]]
 
     outputs_tbxy_step3 = [[result_name + "@decode_x_step3"],
                           [result_name + "@decode_y_step3"]]
@@ -301,15 +297,13 @@ def box_coder(op, block):
         node_list.append(node)
 
     if axis == 0:
-        inputs_tbwh_step3 = [
-            [outputs_tbwh_step2[0][0], outputs_transpose_pb[0][0]],
-            [outputs_tbwh_step2[1][0], outputs_transpose_pb[1][0]]
-        ]
+        inputs_tbwh_step3 = [[
+            outputs_tbwh_step2[0][0], outputs_transpose_pb[0][0]
+        ], [outputs_tbwh_step2[1][0], outputs_transpose_pb[1][0]]]
     else:
-        inputs_tbwh_step3 = [
-            [outputs_tbwh_step2[0][0], inputs_transpose_pb[0][0]],
-            [outputs_tbwh_step2[1][0], inputs_transpose_pb[1][0]]
-        ]
+        inputs_tbwh_step3 = [[
+            outputs_tbwh_step2[0][0], inputs_transpose_pb[0][0]
+        ], [outputs_tbwh_step2[1][0], inputs_transpose_pb[1][0]]]
 
     outputs_tbwh_step3 = [[result_name + "@decode_w_step3"],
                           [result_name + "@decode_h_step3"]]
@@ -322,10 +316,9 @@ def box_coder(op, block):
     # final step to calc the result, and concat the result to output
     # return the output box, [(x1, y1), (x2, y2)]
 
-    inputs_half_tbwh_step4 = [
-        [outputs_tbwh_step3[0][0], result_name + "@slice_2"],
-        [outputs_tbwh_step3[1][0], result_name + "@slice_2"]
-    ]
+    inputs_half_tbwh_step4 = [[
+        outputs_tbwh_step3[0][0], result_name + "@slice_2"
+    ], [outputs_tbwh_step3[1][0], result_name + "@slice_2"]]
 
     outputs_half_tbwh_step4 = [[result_name + "@decode_half_w_step4"],
                                [result_name + "@decode_half_h_step4"]]
@@ -334,10 +327,9 @@ def box_coder(op, block):
         node = onnx.helper.make_node(
             'Div', inputs=inputs_name, outputs=outputs_name)
         node_list.append(node)
-    inputs_output_point1 = [
-        [outputs_tbxy_step3[0][0], outputs_half_tbwh_step4[0][0]],
-        [outputs_tbxy_step3[1][0], outputs_half_tbwh_step4[1][0]]
-    ]
+    inputs_output_point1 = [[
+        outputs_tbxy_step3[0][0], outputs_half_tbwh_step4[0][0]
+    ], [outputs_tbxy_step3[1][0], outputs_half_tbwh_step4[1][0]]]
 
     outputs_output_point1 = [[result_name + "@ouput_x1"],
                              [result_name + "@output_y1"]]
@@ -347,10 +339,9 @@ def box_coder(op, block):
             'Sub', inputs=input_name, outputs=output_name)
         node_list.append(node)
 
-    inputs_output_point2 = [
-        [outputs_tbxy_step3[0][0], outputs_half_tbwh_step4[0][0]],
-        [outputs_tbxy_step3[1][0], outputs_half_tbwh_step4[1][0]]
-    ]
+    inputs_output_point2 = [[
+        outputs_tbxy_step3[0][0], outputs_half_tbwh_step4[0][0]
+    ], [outputs_tbxy_step3[1][0], outputs_half_tbwh_step4[1][0]]]
 
     outputs_output_point2 = [[result_name + "@ouput_x2"],
                              [result_name + "@output_y2"]]
@@ -361,10 +352,9 @@ def box_coder(op, block):
             'Add', inputs=input_name, outputs=output_name)
         node_list.append(node)
     if not norm:
-        inputs_unnorm_point2 = [
-            [outputs_output_point2[0][0], result_name + "@slice_1"],
-            [outputs_output_point2[1][0], result_name + "@slice_1"]
-        ]
+        inputs_unnorm_point2 = [[
+            outputs_output_point2[0][0], result_name + "@slice_1"
+        ], [outputs_output_point2[1][0], result_name + "@slice_1"]]
         outputs_unnorm_point2 = [[result_name + "@ouput_unnorm_x2"],
                                  [result_name + "@ouput_unnorm_y2"]]
 

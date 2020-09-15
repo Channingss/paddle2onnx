@@ -18,18 +18,27 @@ from __future__ import absolute_import
 import onnx
 from onnx.optimizer import optimize
 
+
 class GraphOptimizer(object):
-    optimizers_list = ['eliminate_deadend', 'eliminate_nop_dropout',
-                       'eliminate_nop_monotone_argmax', 'eliminate_nop_pad',
-                       'extract_constant_to_initializer', 'eliminate_unused_initializer',
-                       'eliminate_nop_transpose', 
-                       # disable this optimizer until https://github.com/onnx/optimizer/issues/3 gets fixed
-                       # 'fuse_add_bias_into_conv',
-                       'fuse_consecutive_concats',
-                       'fuse_consecutive_log_softmax',
-                       'fuse_consecutive_reduce_unsqueeze', 'fuse_consecutive_squeezes',
-                       'fuse_consecutive_transposes', 'fuse_matmul_add_bias_into_gemm',
-                       'fuse_pad_into_conv', 'fuse_transpose_into_gemm']
+    optimizers_list = [
+        'eliminate_deadend',
+        'eliminate_nop_dropout',
+        'eliminate_nop_monotone_argmax',
+        'eliminate_nop_pad',
+        'extract_constant_to_initializer',
+        'eliminate_unused_initializer',
+        'eliminate_nop_transpose',
+        # disable this optimizer until https://github.com/onnx/optimizer/issues/3 gets fixed
+        # 'fuse_add_bias_into_conv',
+        'fuse_consecutive_concats',
+        'fuse_consecutive_log_softmax',
+        'fuse_consecutive_reduce_unsqueeze',
+        'fuse_consecutive_squeezes',
+        'fuse_consecutive_transposes',
+        'fuse_matmul_add_bias_into_gemm',
+        'fuse_pad_into_conv',
+        'fuse_transpose_into_gemm'
+    ]
 
     def __init__(self):
         super(GraphOptimizer, self).__init__()
@@ -48,6 +57,6 @@ class GraphOptimizer(object):
                 except ValueError:
                     pass
 
-        onnx_model = optimize(onnx_model, self.optimizers_list,
-                                        fixed_point=True) 
+        onnx_model = optimize(
+            onnx_model, self.optimizers_list, fixed_point=True)
         return onnx_model

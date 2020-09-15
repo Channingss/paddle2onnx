@@ -94,8 +94,8 @@ class YoloReader():
                     img = np.swapaxes(img, 1, 2)
                     img = np.swapaxes(img, 1, 0)
                 img = np.expand_dims(img, axis=0)
-                img_size = np.array([im_height, im_width]).reshape(
-                    -1, 2).astype('int32')
+                img_size = np.array([im_height,
+                                     im_width]).reshape(-1, 2).astype('int32')
                 img = img.astype('float32')
                 outputs.append(img)
                 outputs.append(img_size)

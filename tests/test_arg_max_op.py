@@ -32,7 +32,10 @@ class BaseTestCase(OpTest):
         self.inputs = {'X': self.x}
         self.attrs = {'axis': self.axis}
         if self.op_type == "arg_max":
-            self.outputs = {'Out': np.argmin(self.x, axis=self.axis).astype('int64')}
+            self.outputs = {
+                'Out': np.argmin(
+                    self.x, axis=self.axis).astype('int64')
+            }
         else:
             self.outputs = {'Out': np.argmax(self.x, axis=self.axis)}
 

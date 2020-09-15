@@ -174,8 +174,8 @@ class TestPriorBoxOp(OpTest):
         if self.clip:
             out_boxes = np.clip(out_boxes, 0.0, 1.0)
         # set the variance.
-        out_var = np.tile(self.variances, (self.layer_h, self.layer_w,
-                                           self.num_priors, 1))
+        out_var = np.tile(self.variances,
+                          (self.layer_h, self.layer_w, self.num_priors, 1))
         self.out_boxes = out_boxes.astype('float32')
         self.out_var = out_var.astype('float32')
 

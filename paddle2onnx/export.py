@@ -20,8 +20,9 @@ import sys
 from paddle2onnx.graph import StaticGraph
 from paddle2onnx.converter import Converter
 from paddle2onnx.optimizer import GraphOptimizer
-from paddle2onnx import utils 
+from paddle2onnx import utils
 import paddle.fluid as fluid
+
 
 def arg_parser():
     parser = argparse.ArgumentParser()
@@ -59,7 +60,11 @@ def arg_parser():
     return parser
 
 
-def export_dygraph(layer, save_dir, input_spec=None, configs=None, opset_version=9):
+def export_dygraph(layer,
+                   save_dir,
+                   input_spec=None,
+                   configs=None,
+                   opset_version=9):
     output_spec = None
     if configs is not None:
         output_spec = configs.output_spec
@@ -70,8 +75,10 @@ def export_dygraph(layer, save_dir, input_spec=None, configs=None, opset_version
     optimizer.optimize(onnx_model)
     utils.save_onnx_model(onnx_model, save_dir)
 
+
 def export_program():
-    pass 
+    pass
+
 
 def main():
     if len(sys.argv) < 2:
@@ -113,6 +120,7 @@ def main():
     else:
         pass
         #export_program(args.model, args.save_dir, opset_version=args.onnx_opset)
+
 
 if __name__ == "__main__":
     main()

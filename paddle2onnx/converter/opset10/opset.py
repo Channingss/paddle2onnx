@@ -23,6 +23,7 @@ from onnx import helper, onnx_pb
 from ..utils import DTYPE_MAP, get_name, make_constant_node
 from ..opset9.opset import *
 
+
 def slice(op, block):
     axes = op.attr('axes')
     starts = op.attr('starts')
@@ -31,17 +32,16 @@ def slice(op, block):
     starts_name = get_name(op.type, 'starts')
     ends_name = get_name(op.type, 'ends')
 
-    axes_node = make_constant_node(axes_name,
-                                        onnx_pb.TensorProto.INT64, axes)
-    starts_node = make_constant_node(starts_name,
-                                          onnx_pb.TensorProto.INT64, starts)
-    ends_node = make_constant_node(ends_name,
-                                        onnx_pb.TensorProto.INT64, ends)
+    axes_node = make_constant_node(axes_name, onnx_pb.TensorProto.INT64, axes)
+    starts_node = make_constant_node(starts_name, onnx_pb.TensorProto.INT64,
+                                     starts)
+    ends_node = make_constant_node(ends_name, onnx_pb.TensorProto.INT64, ends)
     node = helper.make_node(
         "Slice",
         inputs=[op.input('Input')[0], starts_name, ends_name, axes_name],
         outputs=op.output('Out'), )
     return [starts_node, ends_node, axes_node, node]
+
 
 def bilinear_interp(op, block):
     input_names = op.input_names
@@ -51,18 +51,17 @@ def bilinear_interp(op, block):
             "Resize in onnx(opset<=10) only support coordinate_transformation_mode: 'asymmetric', Try converting with --onnx_opset 11"
         )
     if ('OutSize' in input_names and len(op.input('OutSize')) > 0) or (
-            'SizeTensor' in input_names and
-            len(op.input('SizeTensor')) > 0):
+            'SizeTensor' in input_names and len(op.input('SizeTensor')) > 0):
         node_list = list()
         shape_name0 = get_name(op.type, 'shape')
         shape_node0 = helper.make_node(
             'Shape', inputs=op.input('X'), outputs=[shape_name0])
         starts_name = get_name(op.type, 'slice.starts')
-        starts_node = make_constant_node(
-            starts_name, onnx_pb.TensorProto.INT64, [0])
+        starts_node = make_constant_node(starts_name, onnx_pb.TensorProto.INT64,
+                                         [0])
         ends_name = get_name(op.type, 'slice.ends')
-        ends_node = make_constant_node(ends_name,
-                                            onnx_pb.TensorProto.INT64, [2])
+        ends_node = make_constant_node(ends_name, onnx_pb.TensorProto.INT64,
+                                       [2])
         shape_name1 = get_name(op.type, 'shape')
         shape_node1 = helper.make_node(
             'Slice',
@@ -78,8 +77,8 @@ def bilinear_interp(op, block):
                 to=onnx_pb.TensorProto.INT64)
             node_list.append(cast_shape_node)
         else:
-            concat_shape_name = get_name(
-                op.type, op.output('Out')[0] + "shape.concat")
+            concat_shape_name = get_name(op.type,
+                                         op.output('Out')[0] + "shape.concat")
             concat_shape_node = helper.make_node(
                 "Concat",
                 inputs=op.input('SizeTensor'),
@@ -137,9 +136,8 @@ def bilinear_interp(op, block):
         scale = op.attr('scale')
         if out_shape.count(-1) > 0:
             scale_name = get_name(op.type, 'scale')
-            scale_node = make_constant_node(scale_name,
-                                                 onnx_pb.TensorProto.FLOAT,
-                                                 [1, 1, scale, scale])
+            scale_node = make_constant_node(
+                scale_name, onnx_pb.TensorProto.FLOAT, [1, 1, scale, scale])
             node = helper.make_node(
                 'Resize',
                 inputs=[op.input('X')[0], scale_name],
@@ -149,6 +147,7 @@ def bilinear_interp(op, block):
         else:
             raise Exception("Unexpected situation happend")
     return node
+
 
 def nearest_interp(op, block):
     input_names = op.input_names
@@ -162,11 +161,11 @@ def nearest_interp(op, block):
         shape_node0 = helper.make_node(
             'Shape', inputs=op.input('X'), outputs=[shape_name0])
         starts_name = get_name(op.type, 'slice.starts')
-        starts_node = make_constant_node(
-            starts_name, onnx_pb.TensorProto.INT64, [0])
+        starts_node = make_constant_node(starts_name, onnx_pb.TensorProto.INT64,
+                                         [0])
         ends_name = get_name(op.type, 'slice.ends')
-        ends_node = make_constant_node(ends_name,
-                                            onnx_pb.TensorProto.INT64, [2])
+        ends_node = make_constant_node(ends_name, onnx_pb.TensorProto.INT64,
+                                       [2])
         shape_name1 = get_name(op.type, 'shape')
         shape_node1 = helper.make_node(
             'Slice',
@@ -182,8 +181,8 @@ def nearest_interp(op, block):
                 to=onnx_pb.TensorProto.INT64)
             node_list.append(cast_shape_node)
         else:
-            concat_shape_name = get_name(
-                op.type, op.output('Out')[0] + "shape.concat")
+            concat_shape_name = get_name(op.type,
+                                         op.output('Out')[0] + "shape.concat")
             concat_shape_node = helper.make_node(
                 "Concat",
                 inputs=op.input('SizeTensor'),
@@ -241,9 +240,8 @@ def nearest_interp(op, block):
         scale = op.attr('scale')
         if out_shape.count(-1) > 0:
             scale_name = get_name(op.type, 'scale')
-            scale_node = make_constant_node(scale_name,
-                                                 onnx_pb.TensorProto.FLOAT,
-                                                 [1, 1, scale, scale])
+            scale_node = make_constant_node(
+                scale_name, onnx_pb.TensorProto.FLOAT, [1, 1, scale, scale])
             node = helper.make_node(
                 'Resize',
                 inputs=[op.input('X')[0], scale_name],

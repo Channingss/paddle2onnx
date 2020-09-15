@@ -24,18 +24,19 @@ from onnx import helper, onnx_pb
 from ..utils import DTYPE_MAP, get_name, make_constant_node
 from ..opset10.opset import *
 
+
 def relu6(op, block):
     min_name = get_name(op.type, 'min')
     max_name = get_name(op.type, 'max')
-    min_node = make_constant_node(min_name, onnx_pb.TensorProto.FLOAT,
-                                       0)
+    min_node = make_constant_node(min_name, onnx_pb.TensorProto.FLOAT, 0)
     max_node = make_constant_node(max_name, onnx_pb.TensorProto.FLOAT,
-                                       op.attr('threshold'))
+                                  op.attr('threshold'))
     node = helper.make_node(
         'Clip',
         inputs=[op.input('X')[0], min_name, max_name],
         outputs=op.output('Out'), )
     return [min_node, max_node, node]
+
 
 def pad2d(op, block):
     x_shape = block.var(op.input('X')[0]).shape
@@ -43,20 +44,15 @@ def pad2d(op, block):
     onnx_pads = []
     #TODO support pads is Variable
     if op.attr('data_format') == 'NCHW':
-        pads = [
-            0, 0, paddings[0], paddings[2], 0, 0, paddings[1], paddings[3]
-        ]
+        pads = [0, 0, paddings[0], paddings[2], 0, 0, paddings[1], paddings[3]]
     else:
-        pads = [
-            0, paddings[0], paddings[2], 0, 0, paddings[1], paddings[3], 0
-        ]
+        pads = [0, paddings[0], paddings[2], 0, 0, paddings[1], paddings[3], 0]
     pads_name = get_name(op.type, 'pads')
-    pads_node = make_constant_node(pads_name,
-                                        onnx_pb.TensorProto.INT64, pads)
+    pads_node = make_constant_node(pads_name, onnx_pb.TensorProto.INT64, pads)
     constant_value_name = get_name(op.type, 'constant_value')
     constant_value_node = make_constant_node(constant_value_name,
-                                                  onnx_pb.TensorProto.FLOAT,
-                                                  op.attr('pad_value'))
+                                             onnx_pb.TensorProto.FLOAT,
+                                             op.attr('pad_value'))
     node = helper.make_node(
         'Pad',
         inputs=op.input('X') + [pads_name, constant_value_name],
@@ -64,18 +60,20 @@ def pad2d(op, block):
         mode=op.attr('mode'))
     return [pads_node, constant_value_node, node]
 
+
 def clip(op, block):
     min_name = get_name(op.type, 'min')
     max_name = get_name(op.type, 'max')
     min_node = make_constant_node(min_name, onnx_pb.TensorProto.FLOAT,
-                                       op.attr('min'))
+                                  op.attr('min'))
     max_node = make_constant_node(max_name, onnx_pb.TensorProto.FLOAT,
-                                       op.attr('max'))
+                                  op.attr('max'))
     node = helper.make_node(
         'Clip',
         inputs=[op.input('X')[0], min_name, max_name],
         outputs=op.output('Out'))
     return [min_node, max_node, node]
+
 
 def bilinear_interp(op, block):
     input_names = op.input_names
@@ -91,10 +89,9 @@ def bilinear_interp(op, block):
 
     roi_name = get_name(op.type, 'roi')
     roi_node = make_constant_node(roi_name, onnx_pb.TensorProto.FLOAT,
-                                       [1, 1, 1, 1, 1, 1, 1, 1])
+                                  [1, 1, 1, 1, 1, 1, 1, 1])
     if ('OutSize' in input_names and len(op.input('OutSize')) > 0) or (
-            'SizeTensor' in input_names and
-            len(op.input('SizeTensor')) > 0):
+            'SizeTensor' in input_names and len(op.input('SizeTensor')) > 0):
         node_list = list()
         empty_name = get_name(op.type, 'empty')
         empty_tensor = helper.make_tensor(
@@ -108,11 +105,11 @@ def bilinear_interp(op, block):
         shape_node0 = helper.make_node(
             'Shape', inputs=op.input('X'), outputs=[shape_name0])
         starts_name = get_name(op.type, 'slice.starts')
-        starts_node = make_constant_node(
-            starts_name, onnx_pb.TensorProto.INT64, [0])
+        starts_node = make_constant_node(starts_name, onnx_pb.TensorProto.INT64,
+                                         [0])
         ends_name = get_name(op.type, 'slice.ends')
-        ends_node = make_constant_node(ends_name,
-                                            onnx_pb.TensorProto.INT64, [2])
+        ends_node = make_constant_node(ends_name, onnx_pb.TensorProto.INT64,
+                                       [2])
         shape_name1 = get_name(op.type, 'shape')
         shape_node1 = helper.make_node(
             'Slice',
@@ -170,20 +167,19 @@ def bilinear_interp(op, block):
         scale = op.attr('scale')
         if out_shape.count(-1) > 0:
             scale_name = get_name(op.type, 'scale')
-            scale_node = make_constant_node(scale_name,
-                                                 onnx_pb.TensorProto.FLOAT,
-                                                 [1, 1, scale, scale])
+            scale_node = make_constant_node(
+                scale_name, onnx_pb.TensorProto.FLOAT, [1, 1, scale, scale])
             node = helper.make_node(
                 'Resize',
                 inputs=[op.input('X')[0], roi_name, scale_name],
                 outputs=op.output('Out'),
                 mode='linear',
-                coordinate_transformation_mode=coordinate_transformation_mode
-            )
+                coordinate_transformation_mode=coordinate_transformation_mode)
             return [scale_node, roi_node, node]
         else:
             raise Exception("Unexpected situation happend")
     return [roi_node, node]
+
 
 def nearest_interp(op, block):
     input_names = op.input_names
@@ -195,11 +191,10 @@ def nearest_interp(op, block):
         coordinate_transformation_mode = 'half_pixel'
     roi_name = get_name(op.type, 'roi')
     roi_node = make_constant_node(roi_name, onnx_pb.TensorProto.FLOAT,
-                                       [1, 1, 1, 1, 1, 1, 1, 1])
+                                  [1, 1, 1, 1, 1, 1, 1, 1])
 
     if ('OutSize' in input_names and len(op.input('OutSize')) > 0) or (
-            'SizeTensor' in input_names and
-            len(op.input('SizeTensor')) > 0):
+            'SizeTensor' in input_names and len(op.input('SizeTensor')) > 0):
         node_list = list()
         empty_name = get_name(op.type, 'empty')
         empty_tensor = helper.make_tensor(
@@ -213,11 +208,11 @@ def nearest_interp(op, block):
         shape_node0 = helper.make_node(
             'Shape', inputs=op.input('X'), outputs=[shape_name0])
         starts_name = get_name(op.type, 'slice.starts')
-        starts_node = make_constant_node(
-            starts_name, onnx_pb.TensorProto.INT64, [0])
+        starts_node = make_constant_node(starts_name, onnx_pb.TensorProto.INT64,
+                                         [0])
         ends_name = get_name(op.type, 'slice.ends')
-        ends_node = make_constant_node(ends_name,
-                                            onnx_pb.TensorProto.INT64, [2])
+        ends_node = make_constant_node(ends_name, onnx_pb.TensorProto.INT64,
+                                       [2])
         shape_name1 = get_name(op.type, 'shape')
         shape_node1 = helper.make_node(
             'Slice',
@@ -275,36 +270,32 @@ def nearest_interp(op, block):
         scale = op.attr('scale')
         if out_shape.count(-1) > 0:
             scale_name = get_name(op.type, 'scale')
-            scale_node = make_constant_node(scale_name,
-                                                 onnx_pb.TensorProto.FLOAT,
-                                                 [1, 1, scale, scale])
+            scale_node = make_constant_node(
+                scale_name, onnx_pb.TensorProto.FLOAT, [1, 1, scale, scale])
             node = helper.make_node(
                 'Resize',
                 inputs=[op.input('X')[0], roi_name, scale_name],
                 outputs=op.output('Out'),
                 mode='nearest',
-                coordinate_transformation_mode=coordinate_transformation_mode
-            )
+                coordinate_transformation_mode=coordinate_transformation_mode)
             return [scale_node, roi_node, node]
         else:
             raise Exception("Unexpected situation happend")
     return [roi_node, node]
+
 
 def hard_swish(op, block):
     min_name = get_name(op.type, 'min')
     max_name = get_name(op.type, 'max')
     scale_name = get_name(op.type, 'scale')
     offset_name = get_name(op.type, 'offset')
-    min_node = make_constant_node(min_name, onnx_pb.TensorProto.FLOAT,
-                                       0)
+    min_node = make_constant_node(min_name, onnx_pb.TensorProto.FLOAT, 0)
     max_node = make_constant_node(max_name, onnx_pb.TensorProto.FLOAT,
-                                       op.attr('threshold'))
-    scale_node = make_constant_node(scale_name,
-                                         onnx_pb.TensorProto.FLOAT,
-                                         op.attr('scale'))
-    offset_node = make_constant_node(offset_name,
-                                          onnx_pb.TensorProto.FLOAT,
-                                          op.attr('offset'))
+                                  op.attr('threshold'))
+    scale_node = make_constant_node(scale_name, onnx_pb.TensorProto.FLOAT,
+                                    op.attr('scale'))
+    offset_node = make_constant_node(offset_name, onnx_pb.TensorProto.FLOAT,
+                                     op.attr('offset'))
 
     name0 = get_name(op.type, 'add')
     node0 = helper.make_node(
@@ -320,13 +311,14 @@ def hard_swish(op, block):
     node3 = helper.make_node(
         'Div', inputs=[name2, scale_name], outputs=op.output('Out'))
     return [
-        min_node, max_node, scale_node, offset_node, node0, node1, node2,
-        node3
+        min_node, max_node, scale_node, offset_node, node0, node1, node2, node3
     ]
+
 
 def yolo_box(op, block):
     from .paddle_custom_layer.yolo_box import yolo_box
     return yolo_box(op, block)
+
 
 def multiclass_nms(op, block):
     from .paddle_custom_layer.multiclass_nms import multiclass_nms

@@ -194,7 +194,7 @@ class TestBatchNormOp(unittest.TestCase):
 
             # If these are inputs, and the expected input is not necessary
             # and not provided in the list of inputs, we move on to the next
-            # expected input. If not, we make sure it the expected input is 
+            # expected input. If not, we make sure it the expected input is
             # provided, or that it is unnecessary.
             if is_input:
                 if (var_name not in np_list) and var_proto.dispensable:
@@ -299,7 +299,7 @@ class TestBatchNormOp(unittest.TestCase):
             self.op.desc.infer_var_type(self.block.desc)
             self.op.desc.infer_shape(self.block.desc)
 
-            # A list containing outputs that wouldn't be used as outputs 
+            # A list containing outputs that wouldn't be used as outputs
             # of ONNX node
             ignored_outputs = self.ignored_outputs if hasattr(
                 self, "ignored_outputs") else []

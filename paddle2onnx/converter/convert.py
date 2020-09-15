@@ -24,6 +24,7 @@ from onnx import helper, onnx_pb
 from paddle.fluid.dygraph.base import program_desc_tracing_guard, switch_to_static_graph
 from .utils import DTYPE_MAP
 
+
 class Converter(object):
     def __init__(self, opset_version=9):
         self.support_opsets = [9, 10, 11]
@@ -61,7 +62,7 @@ class Converter(object):
             if isinstance(ipt, dict):
                 for key, var in ipt.items():
                     input_nodes.append(getattr(self.ops, 'feed')(var))
-        return input_nodes 
+        return input_nodes
 
     def convert_outputs(self, outputs=None):
         output_nodes = []
@@ -102,9 +103,10 @@ class Converter(object):
             unsupported_ops_string = "\nThere's {} ops are not supported yet\n".format(
                 len(unsupported_ops))
             for op in unsupported_ops:
-                unsupported_ops_string += "=========== {} ===========\n".format(op)
+                unsupported_ops_string += "=========== {} ===========\n".format(
+                    op)
             raise ValueError(unsupported_ops_string)
-        return op_nodes#, input_nodes, output_nodes 
+        return op_nodes  #, input_nodes, output_nodes
 
     @switch_to_static_graph
     def convert(self, paddle_graph):
@@ -122,7 +124,9 @@ class Converter(object):
             outputs=output_nodes)
         opset_imports = [helper.make_opsetid("", self.opset_version)]
         onnx_model = helper.make_model(
-            onnx_graph, producer_name='PaddlePaddle', opset_imports=opset_imports)
+            onnx_graph,
+            producer_name='PaddlePaddle',
+            opset_imports=opset_imports)
         onnx.checker.check_model(onnx_model)
 
         return onnx_model
@@ -144,5 +148,6 @@ class Converter(object):
             .format(self.support_opsets, opset_version, run_opset))
         opset = 'opset' + str(run_opset)
         import importlib
-        ops_module = importlib.import_module('.opset', package='paddle2onnx.converter.' + opset)
+        ops_module = importlib.import_module(
+            '.opset', package='paddle2onnx.converter.' + opset)
         return ops_module
