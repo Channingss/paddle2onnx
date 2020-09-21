@@ -15,6 +15,9 @@
 from __future__ import absolute_import
 from . import export
 from . import graph
-from . import converter
+from . import onnx_opset
 from . import utils
+from . import convert
+OpMapper = convert.OpMapper
+convert = convert.convert
 export_dygraph = export.export_dygraph

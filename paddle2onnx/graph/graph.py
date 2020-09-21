@@ -17,6 +17,8 @@ import os
 import pickle
 import warnings
 import inspect
+import copy
+import collections
 
 import paddle
 import paddle.jit as jit
@@ -144,17 +146,95 @@ def get_inout_spec(all_vars, target_vars, return_name=False):
     return result_list
 
 
-class StaticGraph():
-    def __init__(self, program, parameters, inputs, outputs):
-        self.program = program
-        self.parameters = parameters
+class Node(object):
+    def __init__(self, op_type, layer_name, inputs, outputs, attrs, block):
+        self.block = block
         self.inputs = inputs
         self.outputs = outputs
+        self.type = op_type
+        self.attrs = attrs
+        self.layer_name = layer_name
+
+    def __hash__(self):
+        return hash(self.layer_name)
+
+    def __eq__(self, other):
+        if self.layer_name == other.layer_name:
+            return True
+        return False
+
+    def input(self, name, idx=None):
+        if idx is None:
+            return self.inputs(name)
+        return self.inputs(name)[idx]
+
+    @property
+    def input_names(self):
+        return [name for name in self.inputs]
+
+    @property
+    def output_names(self):
+        return [name for name in self.outputs]
+
+    def output(self, name, idx=None):
+        if idx is None:
+            return self.outputs(name)
+        return self.outputs(name)[idx]
+
+    def output_shape(self, arg_name, idx):
+        return self.block.var(self.output(arg_name)[idx]).shape
+
+    def input_shape(self, arg_name, idx):
+        return self.block.var(self.input(arg_name)[idx]).shape
+
+    def input_var(self, arg_name, idx):
+        return self.block.var(self.input(arg_name)[idx])
+
+    def attr(self, name):
+        return self.attrs[name]
+
+
+class Graph(object):
+    def __init__(self, program):
+        self.node_map = collections.OrderedDict()
+        self.input_nodes = list()
+        self.output_nodes = list()
+        self.topo_sort = list()
+        self.op_type_count = {}
+        self.build(program)
+
+    def make_pd_node(self, op, block):
+        node = self.make_node(op.type, op.input, op.output,
+                              op.all_attrs(), block)
+        return node
+
+    def make_node(self, op_type, inputs, outputs, attr, block):
+        if op_type in self.op_type_count:
+            self.op_type_count[op_type] += 1
+        else:
+            self.op_type_count[op_type] = 1
+        layer_name = op_type + '@' + str(self.op_type_count[op_type])
+        node = Node(op_type, layer_name, inputs, outputs, attr, block)
+        self.node_map[layer_name] = node
+        return node
+
+    def build(self, program):
+        for block in program.blocks:
+            for i, op in enumerate(block.ops):
+                node = self.make_pd_node(op, block)
+                self.topo_sort.append(node)
+
+    def get_node(self, name, copy=False):
+        if copy:
+            node = cp.copy(self.node_map[name])
+        else:
+            node = self.node_map[name]
+        return node
 
     @staticmethod
     @base.switch_to_static_graph
     def parse_graph(layer, input_spec=None, output_spec=None):
-        jit.set_verbosity(10)
+        jit.set_verbosity(2)
         if isinstance(layer, io.TranslatedLayer):
             program = layer.program()
             parameters = layer.parameters()
@@ -164,10 +244,9 @@ class StaticGraph():
             concrete_program = get_concrete_program(layer)
             concrete_program = prune_input_output(concrete_program, input_spec,
                                                   output_spec)
-            static_graph = StaticGraph(
-                concrete_program.main_program, concrete_program.parameters,
-                concrete_program.inputs, concrete_program.outputs)
-            return static_graph
+            graph = Graph(concrete_program.main_program)
+            return graph, concrete_program.parameters, concrete_program.inputs, concrete_program.outputs, concrete_program.main_program.blocks[
+                0]
         else:
             raise TypeError(
                 "The input Layer should be 'Layer' or 'StaticLayer', 'TranslatedLayer', but received  type is %s."

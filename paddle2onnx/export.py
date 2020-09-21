@@ -18,23 +18,27 @@ import argparse
 import sys
 import os
 import paddle.fluid as fluid
-from paddle2onnx.graph import StaticGraph
-from paddle2onnx.converter import Converter
+from paddle2onnx.graph import Graph
+from paddle2onnx.convert import convert
 from paddle2onnx.optimizer import GraphOptimizer
 
 
-def export(model, save_dir, input_spec=None, configs=None, opset_version=9):
+def export_dygraph(model,
+                   save_dir,
+                   input_spec=None,
+                   configs=None,
+                   opset_version=9):
     output_spec = None
     if configs is not None:
         output_spec = configs.output_spec
 
-    static_graph = StaticGraph.parse_graph(model, input_spec, output_spec)
+    graph, param, input, output, block = Graph.parse_graph(model, input_spec,
+                                                           output_spec)
 
-    converter = Converter(opset_version)
-    onnx_model = converter.convert(static_graph)
+    onnx_model = convert(graph, param, input, output, block, opset_version)
 
-    optimizer = GraphOptimizer()
-    onnx_model = optimizer.optimize(onnx_model)
+    #optimizer = GraphOptimizer()
+    #onnx_model = optimizer.optimize(onnx_model)
 
     path, file_name = os.path.split(save_dir)
     if path != '' and not os.path.isdir(path):

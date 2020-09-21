@@ -469,7 +469,6 @@ def flatten2(op, block):
 
 
 def reshape2(op, block):
-    input_names = op.input_names
     if len(op.input('ShapeTensor')) > 1:
         cast_shape_nodes = list()
         cast_shape_names = list()

@@ -1,6 +1,6 @@
-#   Copyright (c) 2019  PaddlePaddle Authors. All Rights Reserved.
+#   Copyright (c) 2020 PaddlePaddle Authors. All Rights Reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License"
+# Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
@@ -12,13 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import math
-import sys
-import os
-import numpy as np
-import paddle.fluid.core as core
-import paddle.fluid as fluid
-import onnx
-from onnx import helper, onnx_pb
-from ..utils import DTYPE_PADDLE_ONNX_MAP, get_name, make_constant_node
-from ..opset9.opset import *
+from . import box_coder
+from . import multiclass_nms
+from . import prior_box
+from . import yolo_box

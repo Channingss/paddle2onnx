@@ -42,8 +42,6 @@ class Converter(object):
             if not param.persistable:
                 continue
             weight = np.array(param.value().get_tensor())
-            if param.name == 'fc10_offset':
-                print(weight)
             tensor = helper.make_tensor(
                 name=param.name,
                 dims=param.shape,
@@ -151,3 +149,44 @@ class Converter(object):
         ops_module = importlib.import_module(
             '.opset', package='paddle2onnx.converter.' + opset)
         return ops_module
+
+    @switch_to_static_graph
+    def convert(self, graph, parameters, inputs, outputs, block):
+        print("Converting PaddlePaddle to ONNX...\n")
+        input_nodes = self.convert_inputs(inputs)
+        output_nodes = self.convert_outputs(outputs)
+        weight_nodes = self.convert_weights(parameters)
+        op_nodes = list()
+        unsupported_ops = set()
+        for i, op in enumerate(graph.topo_sort):
+            if not hasattr(self.ops, op.type):
+                unsupported_ops.add(op.type)
+                continue
+            if len(unsupported_ops) > 0:
+                continue
+            #node = getattr(self.op_set, op.type)(op, block)
+            if op.type == 'feed':
+                #input_nodes.append(node)
+                continue
+            if op.type == 'fetch':
+                #output_nodes.append(node)
+                continue
+            node = getattr(self.ops, op.type)(op, block)
+            if isinstance(node, list):
+                op_nodes = op_nodes + node
+            else:
+                op_nodes.append(node)
+        onnx_graph = helper.make_graph(
+            nodes=weight_nodes + op_nodes,
+            name='paddle-onnx',
+            initializer=[],
+            inputs=input_nodes,
+            outputs=output_nodes)
+        opset_imports = [helper.make_opsetid("", self.opset_version)]
+        onnx_model = helper.make_model(
+            onnx_graph,
+            producer_name='PaddlePaddle',
+            opset_imports=opset_imports)
+        onnx.checker.check_model(onnx_model)
+
+        return onnx_model
