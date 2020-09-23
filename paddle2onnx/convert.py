@@ -74,62 +74,44 @@ def convert_weights(parameters=None):
     return nodes
 
 
-class OpMapper(object):
-    OPSETS = {}
+def get_max_support_version(versions, opset_version):
+    max_version = -1
+    for vs in sorted(versions):
+        if vs < opset_version:
+            max_version = vs
+    return max_version
 
-    def __init__(self, name, **kwargs):
-        if not isinstance(name, list):
-            name = [name]
-        self.name = name
-        self.kwargs = kwargs
 
-    def __call__(self, cls):
-        for k, v in inspect.getmembers(cls, inspect.ismethod):
-            if k.startswith("opset_"):
-                version = int(k.replace("opset_", ""))
-                if version not in OpMapper.OPSETS:
-                    OpMapper.OPSETS[version] = {}
-                opset_dict = OpMapper.OPSETS[version]
-                for op in self.name:
-                    opset_dict[op] = (v, self.kwargs)
+def convert_nodes(node_list, opset_version):
+    onnx_nodes = list()
+    unsupported_op_type = set()
+    for i, node in enumerate(node_list):
+        sys.stdout.write("\rTotal:{}, Current:{} : {} ".format(
+            len(node_list), i + 1, node.type))
+        sys.stdout.flush()
+        if node.type == 'feed':
+            #input_nodes.append(node)
+            continue
+        if node.type == 'fetch':
+            #output_nodes.append(node)
+            continue
 
-    @staticmethod
-    def convert_ops(graph, opset_version):
-        op_nodes = list()
-        input_nodes = list()
-        output_nodes = list()
-        unsupported_ops = set()
-        opsets = OpMapper.OPSETS[opset_version]
-        for i, op in enumerate(graph.topo_sort):
-            sys.stdout.write("\rTotal:{}, Current:{} : {} ".format(
-                len(graph.topo_sort), i + 1, op.type))
-            sys.stdout.flush()
-            if op.type == 'feed':
-                #input_nodes.append(node)
-                continue
-            if op.type == 'fetch':
-                #output_nodes.append(node)
-                continue
-            if op.type not in opsets:
-                unsupported_ops.add(op.type)
-                continue
-            if len(unsupported_ops) > 0:
-                continue
-            mapper_func, kw = opsets[op.type]
-            node = mapper_func(op, **kw)
-            if isinstance(node, list):
-                op_nodes = op_nodes + node
-            else:
-                op_nodes.append(node)
+        onnx_node = OpMapper.mapping(node, opset_version)
+        if isinstance(onnx_node, list):
+            onnx_nodes = onnx_nodes + onnx_node
+        elif onnx_node is None:
+            unsupported_op_type.add(node.type)
+        else:
+            onnx_nodes.append(node)
 
-        if len(unsupported_ops) > 0:
-            unsupported_ops_string = "\nThere's {} ops are not supported yet\n".format(
-                len(unsupported_ops))
-            for op in unsupported_ops:
-                unsupported_ops_string += "=========== {} ===========\n".format(
-                    op)
-            raise ValueError(unsupported_ops_string)
-        return op_nodes
+    if len(unsupported_op_type) > 0:
+        unsupported_op_type_string = "\nThere's {} ops are not supported yet\n".format(
+            len(unsupported_op_type))
+        for op_type in unsupported_op_type:
+            unsupported_op_type_string += "=========== {} ===========\n".format(
+                op_type)
+        raise ValueError(unsupported_op_type_string)
+    return onnx_nodes
 
 
 def convert(graph, parameters, inputs, outputs, block, opset_version):
@@ -137,10 +119,10 @@ def convert(graph, parameters, inputs, outputs, block, opset_version):
     input_nodes = convert_inputs(inputs)
     output_nodes = convert_outputs(outputs)
     weight_nodes = convert_weights(parameters)
-    op_nodes = OpMapper.convert_ops(graph, opset_version)
+    onnx_nodes = convert_nodes(graph, opset_version)
 
     onnx_graph = helper.make_graph(
-        nodes=weight_nodes + op_nodes,
+        nodes=weight_nodes + onnx_nodes,
         name='paddle-onnx',
         initializer=[],
         inputs=input_nodes,
@@ -151,3 +133,34 @@ def convert(graph, parameters, inputs, outputs, block, opset_version):
     onnx.checker.check_model(onnx_model)
 
     return onnx_model
+
+
+class OpMapper(object):
+    OPSETS = {}
+
+    def __init__(self, pd_op, **kwargs):
+        if not isinstance(pd_op, list):
+            pd_op = [pd_op]
+        self.pd_op = pd_op
+        self.kwargs = kwargs
+
+    def __call__(self, cls):
+        for k, v in inspect.getmembers(cls, inspect.ismethod):
+            if k.startswith("opset_"):
+                version = int(k.replace("opset_", ""))
+                opset_dict = OpMapper.OPSETS[self.name]
+                for pd_op in self.name:
+                    if pd_op not in OpMapper.OPSETS:
+                        OpMapper.OPSETS[self.pd_op] = {}
+                    opset_dict[version] = (v, self.kwargs)
+
+    @staticmethod
+    def mapping(node, opset_version):
+        if node.type not in OpMapper.OPSETS:
+            return None
+        opsets_mapping = OpMapper.OPSETS[node.type]
+        versions = opsets_mapping.keys()
+        convert_version = get_max_support_version(versions, opset_version)
+        mapper_func, kw = opsets[convert_version]
+        onnx_node = mapper_func(op, **kw)
+        return onnx_node

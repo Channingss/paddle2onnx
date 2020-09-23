@@ -109,7 +109,6 @@ class Constant():
     @classmethod
     def opset_9(cls, node, **kw):
         value = node.attr('value')
-        print(value)
         dtype = node.attr('dtype')
         shape = node.attr('shape')
         value = np.ones(shape) * value
