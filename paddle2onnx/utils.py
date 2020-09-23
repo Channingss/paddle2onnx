@@ -42,6 +42,15 @@ DTYPE_ONNX_NUMPY_MAP = {
     core.VarDesc.VarType.BOOL: 'bool',
 }
 
+DTYPE_NUMPY_ONNX_MAP = {
+    'float32': core.VarDesc.VarType.FP32,
+    'float64': core.VarDesc.VarType.FP64,
+    'int32': core.VarDesc.VarType.INT32,
+    'int64': core.VarDesc.VarType.INT64,
+    'int16': core.VarDesc.VarType.INT16,
+    'uint16': core.VarDesc.VarType.INT16,
+    'bool': core.VarDesc.VarType.BOOL,
+}
 name_counter = dict()
 
 

@@ -30,7 +30,7 @@ def arg_parser():
         help="define model file path for Paddle")
     parser.add_argument(
         "--mode_type",
-        "-s",
+        "-mt",
         type=_text_type,
         default='program',
         help="path to save translated onnx model")
@@ -56,9 +56,20 @@ def arg_parser():
     return parser
 
 
-def export(model, mode_type, save_dir, opset_version):
-    #TODO add code export by command 
-    pass
+def export_inference_program(model_dir, save_dir, opset_version=10):
+    from paddle2onnx import export_inference_program
+    exe = fluid.Executor(fluid.CPUPlace())
+    [program, feed, fetchs] = fluid.io.load_inference_model(
+        model_dir,
+        exe,
+        model_filename='__model__',
+        params_filename='__params__')
+
+    export_inference_program(
+        program,
+        save_dir,
+        scope=fluid.global_scope(),
+        opset_version=opset_version)
 
 
 def main():
@@ -95,12 +106,8 @@ def main():
 
     assert args.model is not None, "--model should be defined while translating paddle model to onnx"
     assert args.save_dir is not None, "--save_dir should be defined while translating paddle model to onnx"
-
-    export(
-        args.model,
-        args.model_type,
-        args.save_dir,
-        opset_version=args.onnx_opset)
+    export_inference_program(
+        args.model, args.save_dir, opset_version=args.opset_version)
 
 
 if __name__ == "__main__":

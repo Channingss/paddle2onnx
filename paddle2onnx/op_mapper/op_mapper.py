@@ -16,6 +16,14 @@ from __future__ import absolute_import
 import inspect
 
 
+def get_max_support_version(versions, opset_version):
+    max_version = -1
+    for vs in sorted(versions):
+        if vs <= opset_version:
+            max_version = vs
+    return max_version
+
+
 class OpMapper(object):
     OPSETS = {}
 
@@ -29,19 +37,19 @@ class OpMapper(object):
         for k, v in inspect.getmembers(cls, inspect.ismethod):
             if k.startswith("opset_"):
                 version = int(k.replace("opset_", ""))
-                opset_dict = OpMapper.OPSETS[self.name]
-                for pd_op in self.name:
-                    if pd_op not in OpMapper.OPSETS:
-                        OpMapper.OPSETS[self.pd_op] = {}
+                for op in self.pd_op:
+                    if op not in OpMapper.OPSETS:
+                        OpMapper.OPSETS[op] = {}
+                    opset_dict = OpMapper.OPSETS[op]
                     opset_dict[version] = (v, self.kwargs)
 
     @staticmethod
     def mapping(node, opset_version):
         if node.type not in OpMapper.OPSETS:
             return None
-        opsets_mapping = OpMapper.OPSETS[node.type]
-        versions = opsets_mapping.keys()
+        opsets = OpMapper.OPSETS[node.type]
+        versions = list(opsets.keys())
         convert_version = get_max_support_version(versions, opset_version)
         mapper_func, kw = opsets[convert_version]
-        onnx_node = mapper_func(op, **kw)
+        onnx_node = mapper_func(node, **kw)
         return onnx_node

@@ -17,35 +17,33 @@ import sys
 import inspect
 import numpy as np
 import paddle.fluid as fluid
+import onnx
 from onnx import helper, onnx_pb
 from .utils import DTYPE_PADDLE_ONNX_MAP
 from paddle2onnx.op_mapper import OpMapper
 
 
-def make_tensor(var):
+def make_value_info(name, shape, dtype):
     tensor_info = helper.make_tensor_value_info(
-        name=var.name,
-        shape=var.shape,
-        elem_type=DTYPE_PADDLE_ONNX_MAP[var.dtype])
+        name=name, shape=shape, elem_type=DTYPE_PADDLE_ONNX_MAP[dtype])
     return tensor_info
 
 
 def convert_inputs(inputs=None):
     input_nodes = []
     for ipt in inputs:
-        if isinstance(ipt, fluid.Variable):
-            input_nodes.append(make_tensor(ipt))
-        if isinstance(ipt, dict):
-            for key, var in ipt.items():
-                input_nodes.append(make_tensor(ipt))
+        vi = make_value_info(ipt.layer_name,
+                             ipt.attr('shape'), ipt.attr('dtype'))
+        input_nodes.append(vi)
     return input_nodes
 
 
 def convert_outputs(outputs=None):
     output_nodes = []
     for opt in outputs:
-        if isinstance(opt, fluid.Variable):
-            output_nodes.append(make_tensor(opt))
+        vi = make_value_info(opt.layer_name,
+                             opt.attr('shape'), opt.attr('dtype'))
+        output_nodes.append(vi)
     return output_nodes
 
 
@@ -53,29 +51,17 @@ def convert_weights(parameters=None):
     nodes = list()
     if parameters is None:
         return nodes
-    for param in parameters:
-        if param.name.endswith('feed') or param.name.endswith('fetch'):
-            continue
-        if not param.persistable:
-            continue
-        weight = np.array(param.value().get_tensor())
+    for name, param in parameters.items():
+        weight = np.array(param['tensor'])
         tensor = helper.make_tensor(
-            name=param.name,
-            dims=param.shape,
-            data_type=DTYPE_PADDLE_ONNX_MAP[param.dtype],
+            name=name,
+            dims=param['shape'],
+            data_type=DTYPE_PADDLE_ONNX_MAP[param['dtype']],
             vals=weight.flatten().tolist())
         node = helper.make_node(
-            'Constant', inputs=[], outputs=[param.name], value=tensor)
+            'Constant', inputs=[], outputs=[name], value=tensor)
         nodes.append(node)
     return nodes
-
-
-def get_max_support_version(versions, opset_version):
-    max_version = -1
-    for vs in sorted(versions):
-        if vs < opset_version:
-            max_version = vs
-    return max_version
 
 
 def convert_nodes(node_list, opset_version):
@@ -85,20 +71,13 @@ def convert_nodes(node_list, opset_version):
         sys.stdout.write("\rTotal:{}, Current:{} : {} ".format(
             len(node_list), i + 1, node.type))
         sys.stdout.flush()
-        if node.type == 'feed':
-            #input_nodes.append(node)
-            continue
-        if node.type == 'fetch':
-            #output_nodes.append(node)
-            continue
-
         onnx_node = OpMapper.mapping(node, opset_version)
         if isinstance(onnx_node, list):
             onnx_nodes = onnx_nodes + onnx_node
         elif onnx_node is None:
             unsupported_op_type.add(node.type)
         else:
-            onnx_nodes.append(node)
+            onnx_nodes.append(onnx_node)
 
     if len(unsupported_op_type) > 0:
         unsupported_op_type_string = "\nThere's {} ops are not supported yet\n".format(
@@ -108,24 +87,3 @@ def convert_nodes(node_list, opset_version):
                 op_type)
         raise ValueError(unsupported_op_type_string)
     return onnx_nodes
-
-
-def convert(graph, parameters, inputs, outputs, block, opset_version):
-    print("Converting PaddlePaddle to ONNX...\n")
-    input_nodes = convert_inputs(inputs)
-    output_nodes = convert_outputs(outputs)
-    weight_nodes = convert_weights(parameters)
-    onnx_nodes = convert_nodes(graph, opset_version)
-
-    onnx_graph = helper.make_graph(
-        nodes=weight_nodes + onnx_nodes,
-        name='paddle-onnx',
-        initializer=[],
-        inputs=input_nodes,
-        outputs=output_nodes)
-    opset_imports = [helper.make_opsetid("", opset_version)]
-    onnx_model = helper.make_model(
-        onnx_graph, producer_name='PaddlePaddle', opset_imports=opset_imports)
-    onnx.checker.check_model(onnx_model)
-
-    return onnx_model

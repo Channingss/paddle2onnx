@@ -53,6 +53,17 @@ class LeakyRelu():
         return onnx_node
 
 
+@op_mapper('prelu')
+class PRelu():
+    @classmethod
+    def opset_9(cls, node, **kw):
+        onnx_node = helper.make_node(
+            'PRelu',
+            inputs=[node.input('X')[0], node.input('Alpha')[0]],
+            outputs=node.output('Out'))
+        return onnx_node
+
+
 @op_mapper('relu6')
 class Relu6():
     @classmethod

@@ -15,9 +15,9 @@
 from __future__ import absolute_import
 import setuptools
 
-long_description = "paddle-onnx is a toolkit for converting trained model to onnx from PaddlePaddle framework.\n\n"
+long_description = "paddle2onnx is a toolkit for converting trained model to onnx from PaddlePaddle framework.\n\n"
 long_description += "Usage: paddle2onnx --fluid_model src --onnx_model dist  --debug --image_path dataset\n"
-long_description += "GitHub: https://github.com/PaddlePaddle/paddle-onnx\n"
+long_description += "GitHub: https://github.com/PaddlePaddle/paddle2onnx\n"
 long_description += "Email: dltp-sz@baidu.com"
 
 setuptools.setup(
@@ -29,7 +29,7 @@ setuptools.setup(
     "is a toolkit for converting trained model to onnx from PaddlePaddle frameworks.",
     long_description=long_description,
     long_description_content_type="text/plain",
-    url="https://github.com/PaddlePaddle/paddle-onnx",
+    url="https://github.com/PaddlePaddle/paddle2onnx",
     packages=setuptools.find_packages(),
     classifiers=[
     "Programming Language :: Python :: 3",

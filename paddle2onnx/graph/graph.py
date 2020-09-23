@@ -20,6 +20,7 @@ import inspect
 import copy
 import collections
 
+import numpy as np
 import paddle
 import paddle.jit as jit
 import paddle.fluid.core as core
@@ -195,7 +196,8 @@ class Node(object):
 
 
 class Graph(object):
-    def __init__(self, program):
+    def __init__(self, program, parameters):
+        self.parameters = parameters
         self.node_map = collections.OrderedDict()
         self.input_nodes = list()
         self.output_nodes = list()
@@ -203,17 +205,15 @@ class Graph(object):
         self.op_type_count = {}
         self.build(program)
 
-    def make_pd_node(self, op, block):
-        node = self.make_node(op.type, op.input, op.output,
-                              op.all_attrs(), block)
-        return node
-
-    def make_node(self, op_type, inputs, outputs, attr, block):
+    def make_name(self, op_type):
         if op_type in self.op_type_count:
             self.op_type_count[op_type] += 1
         else:
             self.op_type_count[op_type] = 1
         layer_name = op_type + '@' + str(self.op_type_count[op_type])
+        return layer_name
+
+    def make_node(self, op_type, layer_name, inputs, outputs, attr, block):
         node = Node(op_type, layer_name, inputs, outputs, attr, block)
         self.node_map[layer_name] = node
         return node
@@ -221,8 +221,29 @@ class Graph(object):
     def build(self, program):
         for block in program.blocks:
             for i, op in enumerate(block.ops):
-                node = self.make_pd_node(op, block)
-                self.topo_sort.append(node)
+                if op.type == 'feed':
+                    layer_name = op.output('Out')[0]
+                    var = block.var(layer_name)
+                    attrs = {}
+                    attrs['shape'] = var.shape
+                    attrs['dtype'] = var.dtype
+                    node = self.make_node(op.type, layer_name, None, None,
+                                          attrs, block)
+                    self.input_nodes.append(node)
+                elif op.type == 'fetch':
+                    layer_name = op.input('X')[0]
+                    var = block.var(layer_name)
+                    attrs = {}
+                    attrs['shape'] = var.shape
+                    attrs['dtype'] = var.dtype
+                    node = self.make_node(op.type, layer_name, None, None,
+                                          attrs, block)
+                    self.output_nodes.append(node)
+                else:
+                    layer_name = self.make_name(op.type)
+                    node = self.make_node(op.type, layer_name, op.input,
+                                          op.output, op.all_attrs(), block)
+                    self.topo_sort.append(node)
 
     def get_node(self, name, copy=False):
         if copy:
@@ -244,10 +265,40 @@ class Graph(object):
             concrete_program = get_concrete_program(layer)
             concrete_program = prune_input_output(concrete_program, input_spec,
                                                   output_spec)
-            graph = Graph(concrete_program.main_program)
-            return graph, concrete_program.parameters, concrete_program.inputs, concrete_program.outputs, concrete_program.main_program.blocks[
-                0]
+
+            parameters = {}
+            for param in concrete_program.parameters:
+                if param.name.endswith('feed') or param.name.endswith('fetch'):
+                    continue
+                if not param.persistable:
+                    continue
+                parameters[param.name] = {
+                    'tensor': param.value().get_tensor(),
+                    'dtype': param.dtype,
+                    'shape': param.shape
+                }
+            graph = Graph(concrete_program.main_program, parameters)
+            return graph
         else:
             raise TypeError(
                 "The input Layer should be 'Layer' or 'StaticLayer', 'TranslatedLayer', but received  type is %s."
                 % type(layer))
+
+    @staticmethod
+    def parse_program(program, feed=None, fetch=None, scope=None):
+        parameters = {}
+        var_names = program.global_block().vars
+        for name in var_names:
+            var = program.global_block().var(name)
+            if name.endswith('feed') or name.endswith('fetch'):
+                continue
+            if not var.persistable:
+                continue
+            parameters[name] = {
+                'tensor': scope.find_var(name).get_tensor(),
+                'dtype': var.dtype,
+                'shape': var.shape
+            }
+
+        graph = Graph(program, parameters)
+        return graph
