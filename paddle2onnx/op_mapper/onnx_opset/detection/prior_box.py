@@ -25,6 +25,7 @@ from paddle.fluid.executor import _fetch_var as fetch_var
 from onnx import helper
 import paddle.fluid as fluid
 import paddle.fluid.core as core
+from paddle2onnx.op_mapper import OpMapper as op_mapper
 
 
 def ExpandAspectRations(input_aspect_ratior, flip):

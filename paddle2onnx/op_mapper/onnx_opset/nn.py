@@ -21,7 +21,7 @@ import paddle.fluid as fluid
 import onnx
 from onnx import helper, onnx_pb
 from paddle2onnx.utils import DTYPE_PADDLE_ONNX_MAP, DTYPE_ONNX_NUMPY_MAP, get_name, make_constant_node
-from paddle2onnx.convert import OpMapper as op_mapper
+from paddle2onnx.op_mapper import OpMapper as op_mapper
 
 
 @op_mapper(['conv2d', 'depthwise_conv2d'])

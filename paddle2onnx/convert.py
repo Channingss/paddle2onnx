@@ -1,4 +1,4 @@
-#   Copyright (c) 2019  PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2019  PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"
 # you may not use this file except in compliance with the License.
@@ -13,17 +13,13 @@
 # limitations under the License.
 
 from __future__ import absolute_import
-import math
 import sys
-import os
 import inspect
 import numpy as np
-import paddle.fluid.core as core
 import paddle.fluid as fluid
-import onnx
 from onnx import helper, onnx_pb
-from paddle.fluid.dygraph.base import program_desc_tracing_guard, switch_to_static_graph
 from .utils import DTYPE_PADDLE_ONNX_MAP
+from paddle2onnx.op_mapper import OpMapper
 
 
 def make_tensor(var):
@@ -133,34 +129,3 @@ def convert(graph, parameters, inputs, outputs, block, opset_version):
     onnx.checker.check_model(onnx_model)
 
     return onnx_model
-
-
-class OpMapper(object):
-    OPSETS = {}
-
-    def __init__(self, pd_op, **kwargs):
-        if not isinstance(pd_op, list):
-            pd_op = [pd_op]
-        self.pd_op = pd_op
-        self.kwargs = kwargs
-
-    def __call__(self, cls):
-        for k, v in inspect.getmembers(cls, inspect.ismethod):
-            if k.startswith("opset_"):
-                version = int(k.replace("opset_", ""))
-                opset_dict = OpMapper.OPSETS[self.name]
-                for pd_op in self.name:
-                    if pd_op not in OpMapper.OPSETS:
-                        OpMapper.OPSETS[self.pd_op] = {}
-                    opset_dict[version] = (v, self.kwargs)
-
-    @staticmethod
-    def mapping(node, opset_version):
-        if node.type not in OpMapper.OPSETS:
-            return None
-        opsets_mapping = OpMapper.OPSETS[node.type]
-        versions = opsets_mapping.keys()
-        convert_version = get_max_support_version(versions, opset_version)
-        mapper_func, kw = opsets[convert_version]
-        onnx_node = mapper_func(op, **kw)
-        return onnx_node

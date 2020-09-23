@@ -15,7 +15,7 @@
 import onnx
 import numpy as np
 from onnx import onnx_pb, helper
-from paddle2onnx.convert import OpMapper as op_mapper
+from paddle2onnx.op_mapper import OpMapper as op_mapper
 
 
 @op_mapper('im2sequence')
