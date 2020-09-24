@@ -327,31 +327,73 @@ class UniformRandom():
     mapper_dict={'bilinear_interp': 'linear',
                  'nearest_interp': 'nearest'})
 class Resize():
-    node_lists = []
 
     @classmethod
     def opset_10(cls, node, **kw):
+        node_lists = []
+        inputs = [node.input('X')[0]]
+        resize_type = kw['mapper_dict'][node.type]
         if node.attr('align_corners') or node.attr('align_mode') == 0:
             raise Exception(
                 "Resize in onnx(opset<=10) only support coordinate_transformation_mode: 'asymmetric', Try converting with --onnx_opset 11"
             )
-        scale = cls.convert_scale(node, **kw)
+        if len(node.input('OutSize')) > 0 or len(node.input('SizeTensor')) > 0:
+            in_shape, out_shape = cls.compute_output_shape(node, node_lists)
+            cast_shape_name2 = get_name(node.type, "shape.cast")
+            cast_shape_node2 = helper.make_node(
+                'Cast',
+                inputs=[out_shape],
+                outputs=[cast_shape_name2],
+                to=onnx_pb.TensorProto.FLOAT)
+            node_lists.append(cast_shape_node2)
+            cast_shape_name0 = get_name(node.type, "shape.cast")
+            cast_shape_node0 = helper.make_node(
+                'Cast',
+                inputs=[in_shape],
+                outputs=[cast_shape_name0],
+                to=onnx_pb.TensorProto.FLOAT)
+            node_lists.append(cast_shape_node0)
+            outputs_h_w_scales = node.output('Out')[0] + "@out_hw_scales"
+            node_h_w_scales = helper.make_node(
+                'Div',
+                inputs=[cast_shape_name2, cast_shape_name0],
+                outputs=[outputs_h_w_scales])
+            node_lists.append(node_h_w_scales)
+            inputs.append(outputs_h_w_scales)
+        elif 'Scale' in node.inputs and len(node.input('Scale')) > 0:
+            scale =  node.input('Scale')[0]
+            inputs.append(out_shape)
+        else:
+            out_shape = [node.attr('out_h'), node.attr('out_w')]
+            scale = node.attr('scale')
+            if out_shape.count(-1) > 0:
+                scale_name = get_name(node.type, 'scale')
+                scale_node = make_constant_node(scale_name,
+                                                onnx_pb.TensorProto.FLOAT,
+                                                [1, 1, scale, scale])
+                node_lists.append(scale_node)
+                inputs.append(scale_name)
+            else:
+                raise Exception("Unexpected situation happend")
         onnx_node = helper.make_node(
             'Resize',
-            inputs=[node.input('X')[0], scale],
+            inputs=inputs,
             outputs=node.output('Out'),
             mode=resize_type)
-        cls.node_lists.append(onnx_node)
-        return cls.node_lists
+        node_lists.append(onnx_node)
+        return node_lists
 
+    @classmethod
     def opset_11(cls, node, **kw):
+        node_lists = []
+        resize_type = kw['mapper_dict'][node.type]
         coordinate_transformation_mode = ''
         if node.attr('align_corners'):
             coordinate_transformation_mode = 'align_corners'
         elif node.type == 'nearest_interp':
             coordinate_transformation_mode = 'half_pixel'
         else:
-            if node.type('align_mode') == 1:
+            if node.attr('align_mode') == 1:
                 coordinate_transformation_mode = 'asymmetric'
             else:
                 coordinate_transformation_mode = 'half_pixel'
@@ -359,9 +401,8 @@ class Resize():
         roi_node = make_constant_node(roi_name, onnx_pb.TensorProto.FLOAT,
                                       [1, 1, 1, 1, 1, 1, 1, 1])
         inputs = [node.input('X')[0], roi_name]
-        if ('OutSize' in node.inputs and len(node.input('OutSize')) > 0) or (
-                'SizeTensor' in node.inputs and
-                len(node.input('SizeTensor')) > 0):
+        node_lists.append(roi_node)
+        if len(node.input('OutSize')) > 0 or len(node.input('SizeTensor')) > 0:
             empty_name = get_name(node.type, 'empty')
             empty_tensor = helper.make_tensor(
                 empty_name,
@@ -371,93 +412,12 @@ class Resize():
             empty_node = helper.make_node(
                 'Constant', [], outputs=[empty_name], value=empty_tensor)
             inputs.append(empty_name)
-
-        inputs.append(scale)
-        onnx_node = helper.make_node(
-            'Resize',
-            inputs=inputs,
-            outputs=node.output('Out'),
-            mode=resize_type,
-            coordinate_transformation_mode=coordinate_transformation_mode)
-        cls.node_lists.append(onnx_node)
-        return cls.node_lists
-
-    @classmethod
-    def convert_scale(cls, node, **kw):
-        resize_type = kw['mapper_dict'][node.type]
-        input_shape = node.input_shape('X', 0)
-        if ('OutSize' in node.inputs and len(node.input('OutSize')) > 0) or (
-                'SizeTensor' in node.inputs and
-                len(node.input('SizeTensor')) > 0):
-            shape_name0 = get_name(node.type, 'shape')
-            shape_node0 = helper.make_node(
-                'Shape', inputs=node.input('X'), outputs=[shape_name0])
-            starts_name = get_name(node.type, 'slice.starts')
-            starts_node = make_constant_node(starts_name,
-                                             onnx_pb.TensorProto.INT64, [0])
-            ends_name = get_name(node.type, 'slice.ends')
-            ends_node = make_constant_node(ends_name, onnx_pb.TensorProto.INT64,
-                                           [2])
-            shape_name1 = get_name(node.type, 'shape')
-            shape_node1 = helper.make_node(
-                'Slice',
-                inputs=[shape_name0, starts_name, ends_name],
-                outputs=[shape_name1])
-            cls.node_list.extend(
-                [shape_node0, starts_node, ends_node, shape_node1])
-            if 'OutSize' in node.inputs and len(node.input('OutSize')) > 0:
-                cast_shape_name = get_name(node.type, "shape.cast")
-                cast_shape_node = helper.make_node(
-                    'Cast',
-                    inputs=node.input('OutSize'),
-                    outputs=[cast_shape_name],
-                    to=onnx_pb.TensorProto.INT64)
-                cls.node_list.append(cast_shape_node)
-            else:
-                concat_shape_name = get_name(
-                    node.type, node.output('Out')[0] + "shape.concat")
-                concat_shape_node = helper.make_node(
-                    "Concat",
-                    inputs=node.input('SizeTensor'),
-                    outputs=[concat_shape_name],
-                    axis=0)
-                cast_shape_name = get_name(node.type, "shape.cast")
-                cast_shape_node = helper.make_node(
-                    'Cast',
-                    inputs=[concat_shape_name],
-                    outputs=[cast_shape_name],
-                    to=onnx_pb.TensorProto.INT64)
-                cls.node_list.extend([concat_shape_node, cast_shape_node])
-            shape_name2 = get_name(node.type, "shape.concat")
-            shape_node2 = helper.make_node(
-                'Concat',
-                inputs=[shape_name1, cast_shape_name],
-                outputs=[shape_name2],
-                axis=0)
-            cls.node_list.append(shape_node2)
-            cast_shape_name2 = get_name(node.type, "shape.cast")
-            cast_shape_node2 = helper.make_node(
-                'Cast',
-                inputs=[shape_name2],
-                outputs=[cast_shape_name2],
-                to=onnx_pb.TensorProto.FLOAT)
-            cls.node_list.append(cast_shape_node2)
-            cast_shape_name0 = get_name(node.type, "shape.cast")
-            cast_shape_node0 = helper.make_node(
-                'Cast',
-                inputs=[shape_name0],
-                outputs=[cast_shape_name0],
-                to=onnx_pb.TensorProto.FLOAT)
-            cls.node_list.append(cast_shape_node0)
-            outputs_h_w_scales = node.output('Out')[0] + "@out_hw_scales"
-            node_h_w_scales = helper.make_node(
-                'Div',
-                inputs=[cast_shape_name2, cast_shape_name0],
-                outputs=[outputs_h_w_scales])
-            cls.node_list.append(node_h_w_scales)
-            return outputs_h_w_scales
+            node_lists.append(empty_node)
+            in_shape, out_shape = cls.compute_output_shape(node, node_lists)
+            inputs.append(out_shape)
         elif 'Scale' in node.inputs and len(node.input('Scale')) > 0:
-            return node.input('Scale')[0]
+            scale =  node.input('Scale')[0]
+            inputs.append(out_shape)
         else:
             out_shape = [node.attr('out_h'), node.attr('out_w')]
             scale = node.attr('scale')
@@ -466,7 +426,66 @@ class Resize():
                 scale_node = make_constant_node(scale_name,
                                                 onnx_pb.TensorProto.FLOAT,
                                                 [1, 1, scale, scale])
-                cls.node_list.append(scale_node)
-                return scale_name
+                node_lists.append(scale_node)
+                inputs.append(scale_name)
             else:
                 raise Exception("Unexpected situation happend")
+        onnx_node = helper.make_node(
+            'Resize',
+            inputs=inputs,
+            outputs=node.output('Out'),
+            mode=resize_type,
+            coordinate_transformation_mode=coordinate_transformation_mode)
+        node_lists.append(onnx_node)
+        return node_lists
+
+    @classmethod
+    def compute_output_shape(cls, node, node_lists):
+        input_shape = node.input_shape('X', 0)
+        shape_name0 = get_name(node.type, 'shape')
+        shape_node0 = helper.make_node(
+            'Shape', inputs=node.input('X'), outputs=[shape_name0])
+        starts_name = get_name(node.type, 'slice.starts')
+        starts_node = make_constant_node(starts_name,
+                                         onnx_pb.TensorProto.INT64, [0])
+        ends_name = get_name(node.type, 'slice.ends')
+        ends_node = make_constant_node(ends_name, onnx_pb.TensorProto.INT64,
+                                       [2])
+        shape_name1 = get_name(node.type, 'shape')
+        shape_node1 = helper.make_node(
+            'Slice',
+            inputs=[shape_name0, starts_name, ends_name],
+            outputs=[shape_name1])
+        node_lists.extend(
+            [shape_node0, starts_node, ends_node, shape_node1])
+        if len(node.input('OutSize')) > 0:
+            cast_shape_name = get_name(node.type, "shape.cast")
+            cast_shape_node = helper.make_node(
+                'Cast',
+                inputs=node.input('OutSize'),
+                outputs=[cast_shape_name],
+                to=onnx_pb.TensorProto.INT64)
+            node_lists.append(cast_shape_node)
+        else:
+            concat_shape_name = get_name(
+                node.type, node.output('Out')[0] + "shape.concat")
+            concat_shape_node = helper.make_node(
+                "Concat",
+                inputs=node.input('SizeTensor'),
+                outputs=[concat_shape_name],
+                axis=0)
+            cast_shape_name = get_name(node.type, "shape.cast")
+            cast_shape_node = helper.make_node(
+                'Cast',
+                inputs=[concat_shape_name],
+                outputs=[cast_shape_name],
+                to=onnx_pb.TensorProto.INT64)
+            node_lists.extend([concat_shape_node, cast_shape_node])
+        shape_name2 = get_name(node.type, "shape.concat")
+        shape_node2 = helper.make_node(
+            'Concat',
+            inputs=[shape_name1, cast_shape_name],
+            outputs=[shape_name2],
+            axis=0)
+        node_lists.append(shape_node2)
+        return shape_name0, shape_name2 

@@ -51,6 +51,7 @@ DTYPE_NUMPY_ONNX_MAP = {
     'uint16': core.VarDesc.VarType.INT16,
     'bool': core.VarDesc.VarType.BOOL,
 }
+
 name_counter = dict()
 
 
@@ -76,12 +77,3 @@ def make_constant_node(name, dtype, value=None):
         name=name, data_type=dtype, dims=dims, vals=value)
     node = helper.make_node('Constant', inputs=[], outputs=[name], value=tensor)
     return node
-
-
-def save_onnx_model(onnx_model, save_dir):
-    path, file_name = os.path.split(save_dir)
-    if path != '' and not os.path.isdir(path):
-        os.makedirs(path)
-    with open(save_dir, 'wb') as f:
-        f.write(onnx_model.SerializeToString())
-    print("\nONNX model saved in {}".format(save_dir))
