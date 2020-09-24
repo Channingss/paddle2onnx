@@ -49,7 +49,7 @@ def export_dygraph(model,
     if configs is not None:
         output_spec = configs.output_spec
 
-    graph = Graph.parse_graph(model, input_spec, output_spec)
+    graph = Graph.parse_dygraph(model, input_spec, output_spec)
 
     print("Converting PaddlePaddle to ONNX...\n")
     input_nodes = convert_inputs(graph.input_nodes)
@@ -59,9 +59,6 @@ def export_dygraph(model,
 
     onnx_model = make_model(op_nodes, input_nodes, output_nodes, weight_nodes,
                             opset_version)
-
-    #optimizer = GraphOptimizer()
-    #onnx_model = optimizer.optimize(onnx_model)
 
     path, file_name = os.path.split(save_dir)
     if path != '' and not os.path.isdir(path):
@@ -91,9 +88,6 @@ def export_inference_program(program,
 
     onnx_model = make_model(op_nodes, input_nodes, output_nodes, weight_nodes,
                             opset_version)
-
-    #optimizer = GraphOptimizer()
-    #onnx_model = optimizer.optimize(onnx_model)
 
     path, file_name = os.path.split(save_dir)
     if path != '' and not os.path.isdir(path):

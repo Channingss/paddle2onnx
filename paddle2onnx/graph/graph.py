@@ -168,29 +168,29 @@ class Node(object):
     def input(self, name, idx=None):
         if idx is None:
             return self.inputs(name)
-        return self.inputs(name)[idx]
+        return self.inputs[name][idx]
 
     @property
     def input_names(self):
-        return [name for name in self.inputs]
+        return [name for name in self.inputs.keys()]
 
     @property
     def output_names(self):
-        return [name for name in self.outputs]
+        return [name for name in self.outputs.keys()]
 
     def output(self, name, idx=None):
         if idx is None:
-            return self.outputs(name)
-        return self.outputs(name)[idx]
+            return self.outputs[name]
+        return self.outputs[name][idx]
 
     def output_shape(self, arg_name, idx):
-        return self.block.var(self.output(arg_name)[idx]).shape
+        return self.block.var(self.outputs[arg_name][idx]).shape
 
     def input_shape(self, arg_name, idx):
-        return self.block.var(self.input(arg_name)[idx]).shape
+        return self.block.var(self.inputs[arg_name][idx]).shape
 
     def input_var(self, arg_name, idx):
-        return self.block.var(self.input(arg_name)[idx])
+        return self.block.var(self.inputs[arg_name][idx])
 
     def attr(self, name):
         return self.attrs[name]
@@ -206,7 +206,7 @@ class Graph(object):
         self.op_type_count = {}
         self.build(program)
 
-    def make_name(self, op_type):
+    def generate_node_name(self, op_type):
         if op_type in self.op_type_count:
             self.op_type_count[op_type] += 1
         else:
@@ -214,7 +214,9 @@ class Graph(object):
         layer_name = op_type + '@' + str(self.op_type_count[op_type])
         return layer_name
 
-    def make_node(self, op_type, layer_name, inputs, outputs, attr, block):
+    def make_node(self, op_type, inputs, outputs, attr, block, layer_name=None):
+        if layer_name is None:
+            layer_name = self.generate_node_name(op_type)
         node = Node(op_type, layer_name, inputs, outputs, attr, block)
         self.node_map[layer_name] = node
         return node
@@ -228,8 +230,8 @@ class Graph(object):
                     attrs = {}
                     attrs['shape'] = var.shape
                     attrs['dtype'] = var.dtype
-                    node = self.make_node(op.type, layer_name, None, None,
-                                          attrs, block)
+                    node = self.make_node(op.type, None, None, attrs, block,
+                                          layer_name)
                     self.input_nodes.append(node)
                 elif op.type == 'fetch':
                     layer_name = op.input('X')[0]
@@ -237,13 +239,18 @@ class Graph(object):
                     attrs = {}
                     attrs['shape'] = var.shape
                     attrs['dtype'] = var.dtype
-                    node = self.make_node(op.type, layer_name, None, None,
-                                          attrs, block)
+                    node = self.make_node(op.type, None, None, attrs, block,
+                                          layer_name)
                     self.output_nodes.append(node)
                 else:
-                    layer_name = self.make_name(op.type)
-                    node = self.make_node(op.type, layer_name, op.input,
-                                          op.output, op.all_attrs(), block)
+                    inputs = {}
+                    outputs = {}
+                    for ipt in op.input_names:
+                        inputs[ipt] = op.input(ipt)
+                    for opt in op.output_names:
+                        outputs[opt] = op.output(opt)
+                    node = self.make_node(op.type, inputs, outputs,
+                                          op.all_attrs(), block)
                     self.topo_sort.append(node)
 
     def get_node(self, name, copy=False):
@@ -255,7 +262,7 @@ class Graph(object):
 
     @staticmethod
     @base.switch_to_static_graph
-    def parse_graph(layer, input_spec=None, output_spec=None):
+    def parse_dygraph(layer, input_spec=None, output_spec=None):
         jit.set_verbosity(2)
         if isinstance(layer, io.TranslatedLayer):
             program = layer.program()
@@ -282,18 +289,6 @@ class Graph(object):
                         'shape': param.shape
                     }
 
-            #for name in var_names:
-            #    print(name)
-            #    var = program.global_block().var(name)
-            #    if name.endswith('feed') or name.endswith('fetch'):
-            #        continue
-            #    if not var.persistable:
-            #        continue
-            #    parameters[name] = {
-            #        'data': layer.state_dict()[name],
-            #        'dtype': var.dtype,
-            #        'shape': var.shape
-            #    }
             graph = Graph(program, parameters)
             return graph
         else:
@@ -305,18 +300,6 @@ class Graph(object):
     def parse_program(program, feed=None, fetch=None, scope=None):
         parameters = {}
         var_names = program.global_block().vars
-
-        #for var in program.list_vars():
-        #    print(var.name)
-        #    if var.name.endswith('feed') or var.name.endswith('fetch'):
-        #        continue
-        #    if not var.persistable:
-        #        continue
-        #    parameters[var.name] = {
-        #        'tensor': var, #scope.find_var(name).get_tensor(),
-        #        'dtype': var.dtype,
-        #        'shape': var.shape
-        #    }
 
         for name in var_names:
             var = program.global_block().var(name)
