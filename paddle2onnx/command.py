@@ -88,8 +88,6 @@ def main():
             paddle2onnx.__version__))
         return
 
-    assert args.save_dir is not None, "--save_dir is not defined"
-
     try:
         import paddle
         v0, v1, v2 = paddle.__version__.split('.')
