@@ -30,6 +30,7 @@ import paddle.fluid.dygraph.layers as layers
 import paddle.fluid.dygraph.io as io
 from paddle.fluid.framework import Variable
 import paddle.fluid as fluid
+from paddle.fluid.executor import global_scope
 
 
 def prepend_feed_ops(inference_program,
@@ -265,19 +266,33 @@ class Graph(object):
             concrete_program = get_concrete_program(layer)
             concrete_program = prune_input_output(concrete_program, input_spec,
                                                   output_spec)
-
+            program = concrete_program.main_program
             parameters = {}
-            for param in concrete_program.parameters:
-                if param.name.endswith('feed') or param.name.endswith('fetch'):
+
+            #for param in concrete_program.parameters:
+            #    if param.name.endswith('feed') or param.name.endswith('fetch'):
+            #        continue
+            #    if not param.persistable:
+            #        continue
+            #    parameters[param.name] = {
+            #        'tensor': param.value().get_tensor(),
+            #        'dtype': param.dtype,
+            #        'shape': param.shape
+            #    }
+
+            var_names = program.global_block().vars
+            for name in var_names:
+                var = program.global_block().var(name)
+                if name.endswith('feed') or name.endswith('fetch'):
                     continue
-                if not param.persistable:
+                if not var.persistable:
                     continue
-                parameters[param.name] = {
-                    'tensor': param.value().get_tensor(),
-                    'dtype': param.dtype,
-                    'shape': param.shape
+                parameters[name] = {
+                    'tensor': core.Scope().var(name).get_tensor(),
+                    'dtype': var.dtype,
+                    'shape': var.shape
                 }
-            graph = Graph(concrete_program.main_program, parameters)
+            graph = Graph(program, parameters)
             return graph
         else:
             raise TypeError(
@@ -288,14 +303,28 @@ class Graph(object):
     def parse_program(program, feed=None, fetch=None, scope=None):
         parameters = {}
         var_names = program.global_block().vars
+
+        #for var in program.list_vars():
+        #    print(var.name)
+        #    if var.name.endswith('feed') or var.name.endswith('fetch'):
+        #        continue
+        #    if not var.persistable:
+        #        continue
+        #    parameters[var.name] = {
+        #        'tensor': var, #scope.find_var(name).get_tensor(),
+        #        'dtype': var.dtype,
+        #        'shape': var.shape
+        #    }
+
         for name in var_names:
             var = program.global_block().var(name)
+            #print(var)
             if name.endswith('feed') or name.endswith('fetch'):
                 continue
             if not var.persistable:
                 continue
             parameters[name] = {
-                'tensor': scope.find_var(name).get_tensor(),
+                'tensor': scope.var(name).get_tensor(),
                 'dtype': var.dtype,
                 'shape': var.shape
             }
