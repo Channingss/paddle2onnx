@@ -415,7 +415,7 @@ class Resize():
             node_lists.append(empty_node)
             in_shape, out_shape = cls.compute_output_shape(node, node_lists)
             inputs.append(out_shape)
-        elif 'Scale' in node.inputs and len(node.input('Scale')) > 0:
+        elif len(node.input('Scale')) > 0:
             scale =  node.input('Scale')[0]
             inputs.append(out_shape)
         else:
