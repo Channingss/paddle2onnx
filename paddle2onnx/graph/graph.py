@@ -320,7 +320,6 @@ class Graph(object):
 
         for name in var_names:
             var = program.global_block().var(name)
-            #print(var)
             if name.endswith('feed') or name.endswith('fetch'):
                 continue
             if not var.persistable:
