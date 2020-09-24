@@ -359,10 +359,9 @@ class Resize():
         roi_node = make_constant_node(roi_name, onnx_pb.TensorProto.FLOAT,
                                       [1, 1, 1, 1, 1, 1, 1, 1])
         inputs = [node.input('X')[0], roi_name]
-        if ('OutSize' in node.input_names and
-                len(node.input('OutSize')) > 0) or (
-                    'SizeTensor' in node.input_names and
-                    len(node.input('SizeTensor')) > 0):
+        if ('OutSize' in node.inputs and len(node.input('OutSize')) > 0) or (
+                'SizeTensor' in node.inputs and
+                len(node.input('SizeTensor')) > 0):
             empty_name = get_name(node.type, 'empty')
             empty_tensor = helper.make_tensor(
                 empty_name,
