@@ -386,10 +386,9 @@ class Resize():
     def convert_scale(cls, node, **kw):
         resize_type = kw['mapper_dict'][node.type]
         input_shape = node.input_shape('X', 0)
-        if ('OutSize' in node.input_names and
-                len(node.input('OutSize')) > 0) or (
-                    'SizeTensor' in node.input_names and
-                    len(node.input('SizeTensor')) > 0):
+        if ('OutSize' in node.inputs and len(node.input('OutSize')) > 0) or (
+                'SizeTensor' in node.inputs and
+                len(node.input('SizeTensor')) > 0):
             shape_name0 = get_name(node.type, 'shape')
             shape_node0 = helper.make_node(
                 'Shape', inputs=node.input('X'), outputs=[shape_name0])
@@ -406,7 +405,7 @@ class Resize():
                 outputs=[shape_name1])
             cls.node_list.extend(
                 [shape_node0, starts_node, ends_node, shape_node1])
-            if 'OutSize' in node.input_names and len(node.input('OutSize')) > 0:
+            if 'OutSize' in node.inputs and len(node.input('OutSize')) > 0:
                 cast_shape_name = get_name(node.type, "shape.cast")
                 cast_shape_node = helper.make_node(
                     'Cast',
@@ -457,7 +456,7 @@ class Resize():
                 outputs=[outputs_h_w_scales])
             cls.node_list.append(node_h_w_scales)
             return outputs_h_w_scales
-        elif 'Scale' in input_names and len(node.input('Scale')) > 0:
+        elif 'Scale' in node.inputs and len(node.input('Scale')) > 0:
             return node.input('Scale')[0]
         else:
             out_shape = [node.attr('out_h'), node.attr('out_w')]
