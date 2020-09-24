@@ -269,29 +269,31 @@ class Graph(object):
             program = concrete_program.main_program
             parameters = {}
 
-            #for param in concrete_program.parameters:
-            #    if param.name.endswith('feed') or param.name.endswith('fetch'):
-            #        continue
-            #    if not param.persistable:
-            #        continue
-            #    parameters[param.name] = {
-            #        'tensor': param.value().get_tensor(),
-            #        'dtype': param.dtype,
-            #        'shape': param.shape
-            #    }
+            pruned_var_names = program.global_block().vars
+            for param in concrete_program.parameters:
+                if param.name.endswith('feed') or param.name.endswith('fetch'):
+                    continue
+                if not param.persistable:
+                    continue
+                if param.name in pruned_var_names:
+                    parameters[param.name] = {
+                        'data': param.value().get_tensor(),
+                        'dtype': param.dtype,
+                        'shape': param.shape
+                    }
 
-            var_names = program.global_block().vars
-            for name in var_names:
-                var = program.global_block().var(name)
-                if name.endswith('feed') or name.endswith('fetch'):
-                    continue
-                if not var.persistable:
-                    continue
-                parameters[name] = {
-                    'tensor': core.Scope().var(name).get_tensor(),
-                    'dtype': var.dtype,
-                    'shape': var.shape
-                }
+            #for name in var_names:
+            #    print(name)
+            #    var = program.global_block().var(name)
+            #    if name.endswith('feed') or name.endswith('fetch'):
+            #        continue
+            #    if not var.persistable:
+            #        continue
+            #    parameters[name] = {
+            #        'data': layer.state_dict()[name],
+            #        'dtype': var.dtype,
+            #        'shape': var.shape
+            #    }
             graph = Graph(program, parameters)
             return graph
         else:
@@ -324,7 +326,7 @@ class Graph(object):
             if not var.persistable:
                 continue
             parameters[name] = {
-                'tensor': scope.var(name).get_tensor(),
+                'data': scope.var(name).get_tensor(),
                 'dtype': var.dtype,
                 'shape': var.shape
             }

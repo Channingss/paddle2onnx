@@ -52,7 +52,9 @@ def convert_weights(parameters=None):
     if parameters is None:
         return nodes
     for name, param in parameters.items():
-        weight = np.array(param['tensor'])
+        weight = param['data']
+        if weight is not np.ndarray:
+            weight = np.array(weight)
         tensor = helper.make_tensor(
             name=name,
             dims=param['shape'],

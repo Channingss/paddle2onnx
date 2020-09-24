@@ -104,6 +104,7 @@ class Mul():
         out = node.output('Out', 0)
         x_shape = node.input_shape('X', 0)
         y_shape = node.input_shape('Y', 0)
+        out_shape = node.output_shape('Out', 0)
         x_num_col_dims = node.attr('x_num_col_dims')
         y_num_col_dims = node.attr('y_num_col_dims')
         flatten_x_name = 'flatten_{}'.format(x)
