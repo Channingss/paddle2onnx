@@ -335,7 +335,7 @@ class Resize():
             raise Exception(
                 "Resize in onnx(opset<=10) only support coordinate_transformation_mode: 'asymmetric', Try converting with --onnx_opset 11"
             )
-        scale = cls.convert_scale(cls, node, **kw)
+        scale = cls.convert_scale(node, **kw)
         onnx_node = helper.make_node(
             'Resize',
             inputs=[node.input('X')[0], scale],

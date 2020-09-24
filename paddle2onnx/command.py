@@ -35,7 +35,7 @@ def arg_parser():
         default='program',
         help="path to save translated onnx model")
     parser.add_argument(
-        "--save_dir",
+        "--save_file",
         "-s",
         type=_text_type,
         default=None,
@@ -105,9 +105,9 @@ def main():
         )
 
     assert args.model is not None, "--model should be defined while translating paddle model to onnx"
-    assert args.save_dir is not None, "--save_dir should be defined while translating paddle model to onnx"
+    assert args.save_file is not None, "--save_file should be defined while translating paddle model to onnx"
     export_inference_program(
-        args.model, args.save_dir, opset_version=args.opset_version)
+        args.model, args.save_file, opset_version=args.opset_version)
 
 
 if __name__ == "__main__":
