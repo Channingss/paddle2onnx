@@ -15,8 +15,8 @@
 from __future__ import absolute_import
 
 import numpy as np
-import onnx
 import copy
+import paddle2onnx.onnx_helper as onnx
 from paddle2onnx.constant import dtypes
 from paddle2onnx.op_mapper import OpMapper
 from paddle2onnx.constant.op_mapping_status import *
