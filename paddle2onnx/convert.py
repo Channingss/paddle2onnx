@@ -22,6 +22,7 @@ from paddle.fluid import core
 from paddle.fluid.framework import Variable
 from paddle.fluid.dygraph.dygraph_to_static import program_translator
 from paddle.fluid import dygraph
+from paddle2onnx import utils
 import paddle2onnx.onnx_helper as onnx
 from paddle2onnx.constant import PRODUCER
 from paddle2onnx.graph import graph_to_onnx, build_graph
@@ -240,6 +241,15 @@ def convert_dygraph_to_onnx(layer,
                 "The verbose should be 'bool', but received type is %s." %
                 type(kwargs['verbose']))
 
+    enable_onnx_checker = False
+    if 'enable_onnx_checker' in kwargs:
+        if isinstance(kwargs['enable_onnx_checker'], bool):
+            enable_onnx_checker = kwargs['enable_onnx_checker']
+        else:
+            raise TypeError(
+                "The 'enable_onnx_checker' should be 'bool', but received type is %s."
+                % type(kwargs['enable_onnx_checker']))
+
     graph = build_graph_from_dygraph(layer, inner_input_spec, output_spec)
 
     onnx_graphs = graph_to_onnx(graph, opset_version, verbose=verbose)
@@ -250,7 +260,8 @@ def convert_dygraph_to_onnx(layer,
     onnx_model = onnx.helper.make_model(
         onnx_graph, producer_name=PRODUCER, opset_imports=opset_imports)
 
-    #onnx.checker.check_model(onnx_model)
+    if enable_onnx_checker:
+        utils.check_model(onnx_model)
 
     path, _ = os.path.split(save_dir)
     if path != '' and not os.path.isdir(path):

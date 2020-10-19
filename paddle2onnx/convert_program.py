@@ -19,6 +19,7 @@ import six
 import numpy as np
 from paddle.fluid.framework import Variable
 import paddle2onnx.onnx_helper as onnx
+from paddle2onnx import utils
 from paddle2onnx.constant import PRODUCER
 from paddle2onnx.graph import graph_to_onnx, build_graph
 
@@ -48,7 +49,8 @@ def convert_program_to_onnx(program,
                             save_dir,
                             feeded_var_names=None,
                             target_vars=None,
-                            opset_version=9):
+                            opset_version=9,
+                            enable_onnx_checker=False):
 
     if feeded_var_names is not None:
         if isinstance(feeded_var_names, six.string_types):
@@ -78,7 +80,9 @@ def convert_program_to_onnx(program,
     onnx_model = onnx.helper.make_model(
         onnx_graph, producer_name=PRODUCER, opset_imports=opset_imports)
 
-    #onnx.checker.check_model(onnx_model)
+    if enable_onnx_checker:
+        utils.check_model(onnx_model)
+
     path, _ = os.path.split(save_dir)
     if path != '' and not os.path.isdir(path):
         os.makedirs(path)

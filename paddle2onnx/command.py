@@ -49,6 +49,12 @@ def arg_parser():
         type=int,
         default=9,
         help="set onnx opset version to export")
+    parser.add_argument(
+        "--enable_onnx_checker",
+        type=ast.literal_eval,
+        default=False,
+        help="whether check onnx model validity, if True, should 'pip install onnx'"
+    )
     return parser
 
 
@@ -97,7 +103,10 @@ def main():
     assert args.model is not None, "--model should be defined while translating paddle model to onnx"
     assert args.save_file is not None, "--save_file should be defined while translating paddle model to onnx"
     convert_inference_model_to_onnx(
-        args.model, args.save_file, opset_version=args.opset_version)
+        args.model,
+        args.save_file,
+        opset_version=args.opset_version,
+        enable_onnx_checker=args.enable_onnx_checker)
 
 
 if __name__ == "__main__":
