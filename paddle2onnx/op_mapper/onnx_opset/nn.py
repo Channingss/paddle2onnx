@@ -53,19 +53,37 @@ class ConvTranspose():
 
 @op_mapper('pool2d')
 class Pool():
+    pool_type = {
+        'max': ('MaxPool', 'GlobalMaxPool'),
+        'avg': ('AveragePool', 'GlobalAveragePool')
+    }
+
     @classmethod
     def opset_9(cls, graph, node, **kw):
-        pool_type = {
-            'max': ('MaxPool', 'GlobalMaxPool'),
-            'avg': ('AveragePool', 'GlobalAveragePool')
-        }
         if node.attr('global_pooling'):
             onnx_node = graph.make_onnx_node(
-                pool_type[node.attr('pooling_type')][1],
+                cls.pool_type[node.attr('pooling_type')][1],
                 inputs=node.input('X'),
-                outputs=node.output('Out'), )
+                outputs=node.output('Out'))
         elif node.attr('adaptive'):
-            raise Exception("ONNX cannot support adaptive pool")
+            input_height, input_width = node.input_shape('X', 0)[2:]
+            output_height, output_width = node.output_shape('Out', 0)[2:]
+
+            if input_height % output_height != 0 or input_width % output_width != 0:
+                raise Exception("ONNX cannot support adaptive pool")
+            else:
+                stride_h = int(input_height / output_height)
+                stride_w = int(input_width / output_width)
+                kernel_h = input_height - (output_height - 1) * stride_h
+                kernel_w = input_width - (output_width - 1) * stride_w
+
+                onnx_node = graph.make_onnx_node(
+                    cls.pool_type[node.attr('pooling_type')][0],
+                    inputs=node.input('X'),
+                    outputs=node.output('Out'),
+                    kernel_shape=(kernel_h, kernel_w),
+                    strides=(stride_h, stride_w),
+                    pads=[0, 0, 0, 0])
         else:
             input_shape = node.input_shape('X', 0)
             k_size = node.attr('ksize')
@@ -75,7 +93,7 @@ class Pool():
             if input_shape[3] > 0 and input_shape[3] + paddings[1] < k_size[1]:
                 k_size[1] = input_shape[3] + paddings[1]
             onnx_node = graph.make_onnx_node(
-                pool_type[node.attr('pooling_type')][0],
+                cls.pool_type[node.attr('pooling_type')][0],
                 inputs=node.input('X'),
                 outputs=node.output('Out'),
                 kernel_shape=k_size,
@@ -144,3 +162,32 @@ class Dropout():
                 outputs=node.output('Out'))
         else:
             raise Exception("Unexpected situation happend")
+
+
+@op_mapper('roi_align')
+class RoiAlign():
+    @classmethod
+    def opset_10(cls, graph, node, **kw):
+        rois_shape = graph.make_onnx_node(
+            'Shape', inputs=[node.input('ROIs', 0)])
+        starts = graph.make_onnx_node(
+            'Constant', attrs={'dtype': dtypes.ONNX.INT64,
+                               'value': [0]})
+        ends = graph.make_onnx_node(
+            'Constant', attrs={'dtype': dtypes.ONNX.INT64,
+                               'value': [1]})
+        num_rois = graph.make_onnx_node(
+            'Slice', inputs=[rois_shape, starts, ends])
+        #num_rois = graph.make_onnx_node('Constant', dims=[1], dtype=dtypes.ONNX.INT64, value=[7])
+        zero = graph.make_onnx_node(
+            'Constant', dims=[1], dtype=dtypes.ONNX.INT64, value=[0])
+        batch_indices = graph.make_onnx_node('Expand', inputs=[zero, num_rois])
+        node = graph.make_onnx_node(
+            'RoiAlign',
+            inputs=[node.input('X', 0), node.input('ROIs', 0), batch_indices],
+            outputs=node.output('Out'),
+            mode='avg',
+            output_height=node.attr('pooled_height'),
+            output_width=node.attr('pooled_width'),
+            sampling_ratio=node.attr('sampling_ratio'),
+            spatial_scale=node.attr('spatial_scale'))

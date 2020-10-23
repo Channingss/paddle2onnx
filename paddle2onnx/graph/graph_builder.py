@@ -97,8 +97,8 @@ def build_single_graph(block,
 def build_graph(program, parameters, input_spec=None, output_spec=None):
     graphs = {}
 
-    if len(program.blocks) > 1:
-        raise 'Now, paddle export to onnx not support model with multiple blocks.'
+    #if len(program.blocks) > 1:
+    #    raise Exception('Now, paddle export to onnx not support model with multiple blocks.')
 
     # TODO support parse parameters for model with multiple blocks 
     for block in program.blocks:
@@ -108,6 +108,7 @@ def build_graph(program, parameters, input_spec=None, output_spec=None):
         else:
             graph = build_single_graph(block)
 
+        graph.get_edge_map()
         graphs[block.idx] = graph
 
         if block.parent_idx in graphs:

@@ -90,6 +90,25 @@ class ElementwiseOps():
                 op_type, inputs=[x, y_node], outputs=node.output('Out'))
 
 
+@op_mapper('pow')
+class Pow():
+    @classmethod
+    def opset_9(cls, graph, node, **kw):
+        x = node.input('X', 0)
+        factor = node.attr('factor')
+        factor_node = graph.make_onnx_node(
+            'Constant',
+            inputs=[],
+            dims=[1],
+            dtype=dtypes.ONNX.FLOAT,
+            value=factor)
+        x_shape = graph.make_onnx_node('Shape', inputs=[x])
+        factor_broadcast = graph.make_onnx_node(
+            'Expand', inputs=[factor_node, x_shape])
+        onnx_node = graph.make_onnx_node(
+            'Pow', inputs=[x, factor_broadcast], outputs=node.output('Out'))
+
+
 @op_mapper('mul')
 class Mul():
     support_opset_verision_range = (9, 12)
@@ -111,11 +130,13 @@ class Mul():
         shape_node = graph.make_onnx_node(
             'Constant', attrs={'dtype': dtypes.ONNX.INT64,
                                'value': out_shape})
-        mul_node = graph.make_onnx_node('MatMul', inputs=[flatten_x, flatten_y])
-        reshape_out = graph.make_onnx_node(
-            'Reshape',
-            inputs=[mul_node, shape_node],
-            outputs=node.output('Out'))
+        mul_node = graph.make_onnx_node(
+            'MatMul', inputs=[flatten_x, flatten_y], outputs=node.output('Out'))
+        #mul_node = graph.make_onnx_node('MatMul', inputs=[flatten_x, flatten_y])
+        #reshape_out = graph.make_onnx_node(
+        #    'Reshape',
+        #    inputs=[mul_node, shape_node],
+        #    outputs=node.output('Out'))
 
 
 @op_mapper('sum')

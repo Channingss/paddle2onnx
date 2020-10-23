@@ -97,7 +97,9 @@ class Node(object):
         return self.block.var(self.input(name, idx))
 
     def attr(self, name):
-        return self.attrs[name]
+        if name in self.attrs:
+            return self.attrs[name]
+        return None
 
     def set_inputs(self, inputs):
         if isinstance(inputs, list):
@@ -144,6 +146,7 @@ class Graph(object):
         self.node_map = collections.OrderedDict()
         self.input_nodes = list()
         self.output_nodes = list()
+        self.edge_map = dict()
         self.op_type_count = dict()
         self.sub_graphs = list()
 
@@ -185,6 +188,7 @@ class Graph(object):
             self.op_type_count[op_type] += 1
         else:
             self.op_type_count[op_type] = 1
+        # layer_name need follow https://github.com/onnx/onnx/blob/master/docs/OpConventions.md
         layer_name = op_type + '@block_' + str(self.id) + '@' + str(
             self.op_type_count[op_type])
         return layer_name
@@ -215,6 +219,30 @@ class Graph(object):
         if op_type not in ['feed', 'fetch']:
             self.node_map[node.layer_name] = node
         return node
+
+    def get_edge_map(self):
+        edge_map = {}
+        for layer_name, node in self.node_map.items():
+            inputs = None
+            if isinstance(node.inputs, dict):
+                inputs = node.inputs.values()
+                inputs = [x for j in inputs for x in j]
+            elif isinstance(node.inputs, list):
+                inputs = node.inputs
+            for ipt in inputs:
+                for layer_name, ipt_node in self.node_map.items():
+                    if isinstance(ipt_node.outputs, dict):
+                        outputs = ipt_node.outputs.values()
+                        outputs = [x for j in outputs for x in j]
+                    elif isinstance(ipt_node.outputs, list):
+                        outputs = ipt_node.outputs
+                    if ipt in outputs:
+                        if ipt_node not in edge_map:
+                            edge_map[ipt_node] = [node]
+                        else:
+                            edge_map[ipt_node].append(node)
+        self.edge_map = edge_map
+        return edge_map
 
     def make_onnx_node(self,
                        op_type,
@@ -287,3 +315,12 @@ class Graph(object):
         else:
             raise TypeError(
                 'Remove node by str or Node, but got type: {}'.format(node))
+
+    def get_output_nodes(self, node):
+        if node in self.edge_map:
+            return self.edge_map[node]
+        elif self.get_node(node.layer_name, copy=False):
+            return []
+        else:
+            raise KeyError('Node with layer_name {} not in graph.egde_map'.
+                           format(node.layer_name))

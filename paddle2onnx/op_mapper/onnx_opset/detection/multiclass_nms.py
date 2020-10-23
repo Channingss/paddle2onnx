@@ -18,7 +18,7 @@ from paddle2onnx.constant import dtypes
 from paddle2onnx.op_mapper import OpMapper as op_mapper
 
 
-@op_mapper('multiclass_nms')
+@op_mapper(['multiclass_nms', 'multiclass_nms2'])
 class MultiClassNMS():
     """
     Convert the paddle multiclass_nms to onnx op.
@@ -246,6 +246,7 @@ class MultiClassNMS():
             'Squeeze', inputs=[node_cast_topk_class], axes=[0, 2])
         node_neg_squeeze_cast_topk_class = graph.make_onnx_node(
             'Neg', inputs=[node_squeeze_cast_topk_class])
+
         outputs_topk_select_classes_indices = [result_name + "@topk_select_topk_classes_scores",\
             result_name + "@topk_select_topk_classes_indices"]
         node_topk_select_topk_indices = graph.make_onnx_node(
@@ -258,5 +259,21 @@ class MultiClassNMS():
                 node_sort_by_socre_results,
                 outputs_topk_select_classes_indices[1]
             ],
-            outputs=node.output('Out'),
             axis=1)
+        node_concat_final_results = graph.make_onnx_node(
+            'Squeeze',
+            inputs=[node_concat_final_results],
+            outputs=[node.output('Out', 0)],
+            axes=[0])
+
+        if node.type == 'multiclass_nms2':
+            graph.make_onnx_node(
+                'Squeeze',
+                inputs=[node_gather_2_nonzero],
+                outputs=node.output('Index'),
+                axes=[0])
+            #graph.make_onnx_node(
+            #    'Unsqueeze', 
+            #    inputs=[outputs_topk_select_classes_indices[1]],
+            #    outputs=node.output('Index'), 
+            #    axes=[-1])

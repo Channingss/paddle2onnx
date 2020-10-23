@@ -114,6 +114,79 @@ class Constant():
             })
 
 
+@op_mapper('fill_any_like')
+class FullLike():
+    '''
+    fill_any_like is kernel for paddle op::full_like & ones_like
+    '''
+
+    @classmethod
+    def opset_9(cls, graph, node, **kw):
+        shape_node = graph.make_onnx_node('Shape', inputs=node.input('X'))
+        value = node.attr('value')
+        dtype = node.attr('dtype')
+        input_dtype = node.input_var('X', 0).dtype
+        if dtype is None:
+            dtype = input_dtype
+        dtype = dtypes.DTYPE_PADDLE_ONNX_MAP[dtype]
+        graph.make_onnx_node(
+            'ConstantOfShape',
+            inputs=[shape_node],
+            outputs=node.output('Out'),
+            dims=[1],
+            dtype=dtype,
+            value=value)
+
+
+@op_mapper('gather')
+class Gather():
+    @classmethod
+    def opset_9(cls, graph, node, **kw):
+        if len(node.input_shape('Index', 0)) == 1:
+            # gather
+            graph.make_onnx_node(
+                'Gather',
+                inputs=[node.input('X', 0), node.input('Index', 0)],
+                outputs=node.output('Out'))
+        else:
+            # gather_nd 
+            graph.make_onnx_node(
+                'GatherND',
+                inputs=[node.input('X', 0), node.input('Index', 0)],
+                outputs=node.output('Out'))
+
+
+@op_mapper('squeeze2')
+class Squeeze():
+    @classmethod
+    def opset_9(cls, graph, node, **kw):
+        axes = node.attr('axes')
+        graph.make_onnx_node(
+            'Squeeze',
+            inputs=[node.input('X', 0)],
+            outputs=node.output('Out'),
+            axes=axes)
+
+
+@op_mapper('assign_value')
+class Assign():
+    @classmethod
+    def opset_9(cls, graph, node, **kw):
+        if len(node.input_names) > 0:
+            graph.make_onnx_node(
+                'Identity', inputs=node.input('X'), outputs=node.output('Out'))
+        else:
+            value = np.array(node.attr('fp32_values'))
+            if value is None:
+                value = np.array(node.attr('int32_values'))
+            parameter = {
+                'data': value,
+                'dtype': node.attr('dtype'),
+                'shape': node.attr('shape')
+            }
+            graph.parameters[node.output('Out', 0)] = parameter
+
+
 @op_mapper('transpose2')
 class Transpose():
     @classmethod
@@ -220,11 +293,11 @@ class Clip():
     def opset_11(cls, graph, node, **kw):
         min_node = graph.make_onnx_node(
             'Constant',
-            attrs={'dtype': dtypes.ONNX.FP32,
+            attrs={'dtype': dtypes.ONNX.FLOAT,
                    'value': node.attr('min')})
         max_node = graph.make_onnx_node(
             'Constant',
-            attrs={'dtype': dtypes.ONNX.FP32,
+            attrs={'dtype': dtypes.ONNX.FLOAT,
                    'value': node.attr('max')})
         node = graph.make_onnx_node(
             'Clip',

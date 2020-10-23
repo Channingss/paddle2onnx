@@ -82,17 +82,23 @@ def make_onnx_constant_node(node):
 
     tensor = onnx.helper.make_tensor(
         name=node.layer_name, data_type=dtype, dims=dims, vals=value)
+
     onnx_node = onnx.helper.make_node(
-        'Constant', inputs=[], outputs=node.outputs, value=tensor)
+        node.type, inputs=node.inputs, outputs=node.outputs, value=tensor)
+
     return onnx_node
 
 
 def make_onnx_node(node):
-    if node.type == 'Constant':
+    if node.type in ['Constant', 'ConstantOfShape']:
         return make_onnx_constant_node(node)
     else:
         onnx_node = onnx.helper.make_node(
-            node.type, inputs=node.inputs, outputs=node.outputs, **node.attrs)
+            node.type,
+            inputs=node.inputs,
+            outputs=node.outputs,
+            name=node.layer_name,
+            **node.attrs)
         return onnx_node
 
 
@@ -122,7 +128,6 @@ def nodes_to_onnx(graph, opset_version, verbose=False):
         OP_MAPPING_NO_REGISTER: [],
         OP_MAPPING_NO_VERSION: [],
         OP_MAPPING_SUCCESSED: [],
-        OP_MAPPING_FAILED: [],
     }
 
     for name, node in list(graph.node_map.items()):
@@ -147,9 +152,8 @@ def graph_to_onnx(graph, opset_version, verbose=False):
     graph = copy.copy(graph)
     input_nodes = inputs_to_onnx(graph.input_nodes)
     output_nodes = outputs_to_onnx(graph.output_nodes)
-    weight_nodes = weights_to_onnx(graph.parameters)
-
     op_nodes = nodes_to_onnx(graph, opset_version, verbose=verbose)
+    weight_nodes = weights_to_onnx(graph.parameters)
 
     onnx_graph = onnx.helper.make_graph(
         nodes=weight_nodes + op_nodes,

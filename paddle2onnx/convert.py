@@ -252,6 +252,11 @@ def convert_dygraph_to_onnx(layer,
 
     graph = build_graph_from_dygraph(layer, inner_input_spec, output_spec)
 
+    from paddle2onnx.graph.mir import IfElsePass
+
+    pass_1 = IfElsePass()
+    result = pass_1.passing(graph)
+
     onnx_graphs = graph_to_onnx(graph, opset_version, verbose=verbose)
 
     onnx_graph = onnx_graphs[0]

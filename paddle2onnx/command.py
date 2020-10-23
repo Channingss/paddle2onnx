@@ -15,6 +15,7 @@
 from __future__ import absolute_import
 from six import text_type as _text_type
 import argparse
+import ast
 import sys
 import os
 import paddle.fluid as fluid
@@ -58,7 +59,10 @@ def arg_parser():
     return parser
 
 
-def convert_inference_model_to_onnx(model_dir, save_dir, opset_version=10):
+def convert_inference_model_to_onnx(model_dir,
+                                    save_dir,
+                                    opset_version=10,
+                                    enable_onnx_checker=False):
     # convert model save with 'paddle.fluid.io.save_inference_model'
     try:
         import paddle
@@ -81,7 +85,11 @@ def convert_inference_model_to_onnx(model_dir, save_dir, opset_version=10):
         model_filename='__model__',
         params_filename='__params__')
     convert_program_to_onnx(
-        program, fluid.global_scope(), save_dir, opset_version=opset_version)
+        program,
+        fluid.global_scope(),
+        save_dir,
+        opset_version=opset_version,
+        enable_onnx_checker=enable_onnx_checker)
 
 
 def main():
