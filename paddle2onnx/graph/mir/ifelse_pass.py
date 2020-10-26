@@ -53,9 +53,8 @@ class IfElsePass(object):
                     if not self.match_node(output_nodes[i], pattern_node,
                                            graph):
                         return False
-                    output_nodes = output_nodes[:i] + output_nodes[i + 1:]
+                    #output_nodes = output_nodes[:i] + output_nodes[i + 1:]
                     matched = True
-                    break
             if not matched:
                 return False
         return True
