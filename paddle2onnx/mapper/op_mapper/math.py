@@ -120,23 +120,14 @@ class Mul():
         out = node.output('Out', 0)
         x_shape = node.input_shape('X', 0)
         y_shape = node.input_shape('Y', 0)
-        out_shape = list(node.output_shape('Out', 0))
         x_num_col_dims = node.attr('x_num_col_dims')
         y_num_col_dims = node.attr('y_num_col_dims')
         flatten_x = graph.make_onnx_node(
             'Flatten', inputs=node.input('X'), attrs={'axis': x_num_col_dims})
         flatten_y = graph.make_onnx_node(
             'Flatten', inputs=node.input('Y'), attrs={'axis': y_num_col_dims})
-        shape_node = graph.make_onnx_node(
-            'Constant', attrs={'dtype': dtypes.ONNX.INT64,
-                               'value': out_shape})
         mul_node = graph.make_onnx_node(
             'MatMul', inputs=[flatten_x, flatten_y], outputs=node.output('Out'))
-        #mul_node = graph.make_onnx_node('MatMul', inputs=[flatten_x, flatten_y])
-        #reshape_out = graph.make_onnx_node(
-        #    'Reshape',
-        #    inputs=[mul_node, shape_node],
-        #    outputs=node.output('Out'))
 
 
 @op_mapper('sum')

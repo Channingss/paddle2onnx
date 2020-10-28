@@ -85,7 +85,7 @@ def mapping_outputs_to_onnx(outputs=None):
 
 
 def mapping_weights_to_onnx(parameters=None):
-    nodes = dict()
+    nodes = []
     if parameters is None:
         return nodes
     for name, param in parameters.items():
@@ -99,7 +99,7 @@ def mapping_weights_to_onnx(parameters=None):
             vals=weight.flatten().tolist())
         node = helper.make_node(
             'Constant', inputs=[], outputs=[name], value=tensor)
-        nodes[name] = node
+        nodes.append(node)
     return nodes
 
 
@@ -116,7 +116,7 @@ def check_op_mapping_status(op_mapping_status, opset_version):
     if len(op_mapping_status[OP_MAPPING_NO_VERSION]) > 0:
         unsupported_op_types = set(
             [node.type for node in op_mapping_status[OP_MAPPING_NO_VERSION]])
-        error_info = "\nThere's {} ops are not supported in opset_version {}, please try lower opset version\n".format(
+        error_info = "\nThere's {} ops are not supported in opset_version {}, please try other opset versions\n".format(
             len(unsupported_op_types), opset_version)
 
         for op_type in unsupported_op_types:
@@ -137,29 +137,24 @@ def mapping_nodes_to_onnx(graph, verbose=False):
         op_mapping_status[status].append(node)
 
     check_op_mapping_status(op_mapping_status, graph.opset_version)
-    return graph
+    return [node.node for node in graph.node_map.values()]
 
 
 def mapping_graph_to_onnx_proto(graph, verbose=False):
-    graph.set_input_nodes(mapping_inputs_to_onnx(graph.input_nodes))
-    graph.set_output_nodes(mapping_outputs_to_onnx(graph.output_nodes))
-    graph.set_parameters(mapping_weights_to_onnx(graph.parameters))
-    graph = mapping_nodes_to_onnx(graph)
-
-    weight_nodes = list(graph.parameters.values())
-    op_nodes = [node.node for node in graph.node_map.values()]
+    input_nodes = mapping_inputs_to_onnx(graph.input_nodes)
+    output_nodes = mapping_outputs_to_onnx(graph.output_nodes)
+    weight_nodes = mapping_weights_to_onnx(graph.parameters)
+    op_nodes = mapping_nodes_to_onnx(graph)
 
     onnx_graph = helper.make_graph(
         nodes=weight_nodes + op_nodes,
         name='paddle-onnx',
         initializer=[],
-        inputs=graph.input_nodes,
-        outputs=graph.output_nodes)
+        inputs=input_nodes,
+        outputs=output_nodes)
 
     opset_imports = [helper.make_opsetid("", graph.opset_version)]
     onnx_proto = helper.make_model(
         onnx_graph, producer_name=PRODUCER, opset_imports=opset_imports)
 
-    for idx in range(len(graph.sub_graphs)):
-        graph.sub_graphs[idx] = mapping_graph_to_onnx_proto(graph, verbose)
     return onnx_proto
