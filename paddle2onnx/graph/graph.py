@@ -18,132 +18,21 @@ import os
 import copy
 import collections
 from paddle2onnx.constant import NodeDomain
-
-
-class Node(object):
-    """
-    Args:
-        op_type (str): Operator type, such as 'Conv'.
-        layer_name (str): Name of node, the name of node in graph is unique. 
-        inputs (list|dict): Inputs of node with domain=NodeDomain.ONNX, which stored by list.
-            Inputs of node in node with domain=NodeDomain.PADDLE, which stored by key-value format. 
-        outputs (list|dict): Outputs of node with domain=NodeDomain.ONNX, which stored by list 
-            Outputs of node with domain=NodeDomain.PADDLE, which stored by key-value format 
-        attrs (dict): Attributes of node.
-        block (paddle.fluid.framework.Block): The block that node belongs to. 
-        domain (str):  Domain of node.  
-
-    Returns:
-        Node: An Node.
-    """
-
-    def __init__(self,
-                 op_type,
-                 layer_name,
-                 inputs,
-                 outputs,
-                 attrs,
-                 block,
-                 domain=NodeDomain.PADDLE):
-        self.domain = domain
-        self.block = block
-        self.type = op_type
-        self.attrs = attrs
-        self.layer_name = layer_name
-        self.set_inputs(inputs)
-        self.set_outputs(outputs)
-
-    def __hash__(self):
-        return hash(self.layer_name)
-
-    def __eq__(self, other):
-        if self.layer_name == other.layer_name:
-            return True
-        return False
-
-    @property
-    def input_names(self):
-        if isinstance(self.inputs, dict):
-            return [name for name in self.inputs.keys()]
-        return self.inputs
-
-    @property
-    def output_names(self):
-        if isinstance(self.inputs, dict):
-            return [name for name in self.outputs.keys()]
-        return self.outputs
-
-    def input(self, name=None, idx=None):
-        if idx is None:
-            return self.inputs[name]
-        if name is None:
-            return self.inputs[idx]
-        return self.inputs[name][idx]
-
-    def output(self, name=None, idx=None):
-        if idx is None:
-            return self.outputs[name]
-        if name is None:
-            return self.outputs[idx]
-        return self.outputs[name][idx]
-
-    def output_shape(self, name=None, idx=None):
-        return self.block.var(self.output(name, idx)).shape
-
-    def input_shape(self, name=None, idx=None):
-        return self.block.var(self.input(name, idx)).shape
-
-    def input_var(self, name=None, idx=None):
-        return self.block.var(self.input(name, idx))
-
-    def attr(self, name):
-        if name in self.attrs:
-            return self.attrs[name]
-        return None
-
-    def set_inputs(self, inputs):
-        if isinstance(inputs, list):
-            # input of node in onnx, which stored by list 
-            self.inputs = [
-                ipt.layer_name if isinstance(ipt, Node) else ipt
-                for ipt in inputs
-            ]
-        elif isinstance(inputs, dict):
-            # input of node in paddle, which stored by key-value format 
-            self.inputs = inputs
-        else:
-            raise TypeError(
-                'Inputs of node must be type: list, dict, but got {}'.format(
-                    type(inputs)))
-
-    def set_outputs(self, outputs):
-        if isinstance(outputs, list):
-            # output of node in onnx, which stored by list 
-            self.outputs = [
-                opt.layer_name if isinstance(opt, Node) else opt
-                for opt in outputs
-            ]
-        elif isinstance(outputs, dict):
-            # output of node in paddle, which stored by key-value format 
-            self.outputs = outputs
-        else:
-            raise TypeError(
-                'Outputs of node must be type: list, dict, but got {}'.format(
-                    type(outputs)))
+from paddle2onnx.graph.node import PaddleNode, ONNXNode, Node
 
 
 class Graph(object):
-    """
+    """ Graph IR between Paddle and ONNX.  
     Args:
         id (int): the id of graph.
-    Returns:
-        Graph: A Graph.
     """
 
-    def __init__(self, id):
+    def __init__(self, id, opset_version=None, block=None):
         self.id = id
+        self.opset_version = opset_version
         self.parameters = {}
         self.node_map = collections.OrderedDict()
+        self.topo_sort = list()
         self.input_nodes = list()
         self.output_nodes = list()
         self.edge_map = dict()
@@ -165,15 +54,33 @@ class Graph(object):
         for node in self.output_nodes:
             graph_str += " output: {} \n \n".format(node.layer_name)
         for name, node in self.node_map.items():
-            if node.domain == NodeDomain.PADDLE:
-                node.attrs.pop('op_callstack')
-            attrs = ''
-            for key, value in node.attrs.items():
-                attrs += ', ' + key + '=' + str(value)
-            graph_str += "  {} = {}::{}(inputs={}{}) \n".format(
-                node.outputs, node.domain, node.type, node.inputs, attrs)
+            graph_str += node.__str__()
         graph_str += ' }'
         return graph_str
+
+    def set_output_nodes(self, node_list):
+        if isinstance(node_list, list):
+            self.output_nodes = node_list
+        else:
+            raise TypeError(
+                'output_nodes of Graph must be type: list, but got {}'.format(
+                    type(node_list)))
+
+    def set_node_map(self, node_map):
+        if isinstance(node_map, dict):
+            self.node_map = node_map
+            self.generate_topo_sort()
+        else:
+            raise TypeError('node_map of Graph must be type: list, but got {}'.
+                            format(type(node_map)))
+
+    def set_input_nodes(self, node_list):
+        if isinstance(node_list, list):
+            self.input_nodes = node_list
+        else:
+            raise TypeError(
+                'input_nodes of Graph must be type: list, but got {}'.format(
+                    type(node_list)))
 
     def set_parameters(self, parameters):
         if isinstance(parameters, dict):
@@ -181,7 +88,7 @@ class Graph(object):
         else:
             raise TypeError(
                 'parameters of Graph must be type: dict, but got {}'.format(
-                    type(parametes)))
+                    type(parameters)))
 
     def generate_node_name(self, op_type):
         if op_type in self.op_type_count:
@@ -190,38 +97,10 @@ class Graph(object):
             self.op_type_count[op_type] = 1
         # layer_name need follow https://github.com/onnx/onnx/blob/master/docs/OpConventions.md
         layer_name = op_type + '@block_' + str(self.id) + '@' + str(
-            self.op_type_count[op_type])
+            self.op_type_count[op_type] - 1)
         return layer_name
 
-    def make_node(self,
-                  op_type,
-                  inputs=None,
-                  outputs=None,
-                  attrs=None,
-                  block=None,
-                  layer_name=None,
-                  domain='paddle',
-                  **kw):
-        if layer_name is None:
-            layer_name = self.generate_node_name(op_type)
-
-        if attrs is None:
-            attrs = kw
-        attrs.update(kw)
-
-        if inputs is None:
-            inputs = []
-        if outputs is None:
-            outputs = [layer_name]
-
-        node = Node(op_type, layer_name, inputs, outputs, attrs, block, domain)
-
-        if op_type not in ['feed', 'fetch']:
-            self.node_map[node.layer_name] = node
-        return node
-
-    def get_edge_map(self):
-        edge_map = {}
+    def generate_edge_map(self):
         for layer_name, node in self.node_map.items():
             inputs = None
             if isinstance(node.inputs, dict):
@@ -237,31 +116,105 @@ class Graph(object):
                     elif isinstance(ipt_node.outputs, list):
                         outputs = ipt_node.outputs
                     if ipt in outputs:
-                        if ipt_node not in edge_map:
-                            edge_map[ipt_node] = [node]
+                        if ipt_node not in self.edge_map:
+                            self.edge_map[ipt_node] = [node]
                         else:
-                            edge_map[ipt_node].append(node)
-        self.edge_map = edge_map
-        return edge_map
+                            self.edge_map[ipt_node].append(node)
+
+    def generate_topo_sort(self):
+        self.generate_edge_map()
+        input_node_names = [node.layer_name for node in self.input_nodes]
+        for layer_name, node in self.node_map.items():
+            if node not in self.edge_map:
+                self.topo_sort.append(node)
+        for current_node in self.topo_sort:
+            if isinstance(current_node.outputs, dict):
+                outputs = current_node.outputs.values()
+                outputs = [x for j in outputs for x in j]
+            elif isinstance(current_node.outputs, list):
+                outputs = current.outputs
+            for layer_name, node in self.node_map.items():
+                if isinstance(node.inputs, dict):
+                    inputs = node.inputs.values()
+                    inputs = [x for j in inputs for x in j]
+                elif isinstance(node.inputs, list):
+                    inputs = node.inputs
+                for ipt in inputs:
+                    if ipt in outputs:
+                        self.topo_sort.append(node)
+
+    def insert_node(self, node):
+        if node.type not in ['feed', 'fetch']:
+            self.node_map[node.layer_name] = node
+
+    def make_node(self,
+                  op_type,
+                  inputs=None,
+                  outputs=None,
+                  attrs=None,
+                  layer_name=None,
+                  domain=None,
+                  **kw):
+        if layer_name is None:
+            layer_name = self.generate_node_name(op_type)
+
+        if attrs is None:
+            attrs = kw
+        attrs.update(kw)
+
+        if inputs is None:
+            inputs = []
+        if outputs is None:
+            outputs = [layer_name]
+        node = Node(op_type, layer_name, inputs, outputs, attrs, domain)
+        self.insert_node(node)
+        return node
 
     def make_onnx_node(self,
                        op_type,
-                       layer_name=None,
                        inputs=None,
                        outputs=None,
                        attrs=None,
-                       block=None,
+                       layer_name=None,
                        **kw):
         domain = NodeDomain.ONNX
-        node = self.make_node(
-            op_type,
-            layer_name=layer_name,
-            inputs=inputs,
-            outputs=outputs,
-            attrs=attrs,
-            block=block,
-            domain=domain,
-            **kw)
+        if layer_name is None:
+            layer_name = self.generate_node_name(op_type)
+
+        if attrs is None:
+            attrs = kw
+        attrs.update(kw)
+
+        if inputs is None:
+            inputs = []
+        if outputs is None:
+            outputs = [layer_name]
+        node = ONNXNode(op_type, layer_name, inputs, outputs, attrs, domain)
+        self.insert_node(node)
+        return node
+
+    def make_paddle_node(self,
+                         op,
+                         inputs=None,
+                         outputs=None,
+                         attrs=None,
+                         block=None,
+                         layer_name=None,
+                         **kw):
+        domain = NodeDomain.PADDLE
+        if layer_name is None:
+            layer_name = self.generate_node_name(op.type)
+
+        if attrs is None:
+            attrs = kw
+        attrs.update(kw)
+
+        if inputs is None:
+            inputs = {}
+        if outputs is None:
+            outputs = {'Out': layer_name}
+        node = PaddleNode(op, layer_name, inputs, outputs, attrs, block, domain)
+        self.insert_node(node)
         return node
 
     def update_node(self,
@@ -316,7 +269,7 @@ class Graph(object):
             raise TypeError(
                 'Remove node by str or Node, but got type: {}'.format(node))
 
-    def get_output_nodes(self, node):
+    def get_output_nodes_of_node(self, node):
         if node in self.edge_map:
             return self.edge_map[node]
         elif self.get_node(node.layer_name, copy=False):

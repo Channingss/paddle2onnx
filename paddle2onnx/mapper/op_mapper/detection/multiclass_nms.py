@@ -15,7 +15,7 @@
 import numpy as np
 import logging
 from paddle2onnx.constant import dtypes
-from paddle2onnx.op_mapper import OpMapper as op_mapper
+from paddle2onnx.mapper.op_mapper import OpMapper as op_mapper
 
 
 @op_mapper(['multiclass_nms', 'multiclass_nms2'])

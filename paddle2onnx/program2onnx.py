@@ -21,10 +21,15 @@ from paddle.fluid.framework import Variable
 import paddle2onnx.onnx_helper as onnx
 from paddle2onnx import utils
 from paddle2onnx.constant import PRODUCER
-from paddle2onnx.graph import graph_to_onnx, build_graph
+from paddle2onnx.graph import build_graph
+from paddle2onnx.mapper.graph_mapper import mapping_graph_to_onnx_proto
 
 
-def build_graph_from_program(program, feed=None, fetch=None, scope=None):
+def build_graph_from_program(program,
+                             feed=None,
+                             fetch=None,
+                             scope=None,
+                             opset_version=None):
     parameters_dict = {}
     vars = program.global_block().vars
 
@@ -40,7 +45,7 @@ def build_graph_from_program(program, feed=None, fetch=None, scope=None):
             'shape': var.shape
         }
 
-    graph = build_graph(program, parameters_dict)
+    graph = build_graph(program, parameters_dict, opset_version=opset_version)
     return graph
 
 
@@ -70,23 +75,17 @@ def convert_program_to_onnx(program,
                 raise TypeError("'target_vars' should be a list of variable.")
 
     graph = build_graph_from_program(program, feeded_var_names, target_vars,
-                                     scope)
+                                     scope, opset_version)
 
-    onnx_graphs = graph_to_onnx(graph, opset_version)
-
-    onnx_graph = onnx_graphs[0]
-
-    opset_imports = [onnx.helper.make_opsetid("", opset_version)]
-    onnx_model = onnx.helper.make_model(
-        onnx_graph, producer_name=PRODUCER, opset_imports=opset_imports)
+    onnx_proto = mapping_graph_to_onnx_proto(graph)
 
     if enable_onnx_checker:
-        utils.check_model(onnx_model)
+        utils.check_model(onnx_proto)
 
     path, _ = os.path.split(save_dir)
     if path != '' and not os.path.isdir(path):
         os.makedirs(path)
     with open(save_dir, 'wb') as f:
-        f.write(onnx_model.SerializeToString())
+        f.write(onnx_proto.SerializeToString())
 
     print("ONNX model saved in {}".format(save_dir))

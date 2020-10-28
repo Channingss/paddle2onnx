@@ -12,4 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .optimizer import GraphOptimizer
+from .graph_mapper import mapping_graph_to_onnx_proto

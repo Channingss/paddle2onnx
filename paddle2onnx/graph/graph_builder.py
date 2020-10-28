@@ -37,8 +37,7 @@ def add_input_node(graph, input_spec=None, op=None, block=None):
         attrs = {}
         attrs['shape'] = var.shape
         attrs['dtype'] = var.dtype
-        node = graph.make_node('feed', [], [layer_name], attrs, block,
-                               layer_name)
+        node = graph.make_node('feed', [], [layer_name], attrs, layer_name)
         graph.input_nodes.append(node)
     return graph
 
@@ -50,8 +49,7 @@ def add_output_node(graph, output_spec=None, op=None, block=None):
             attrs = {}
             attrs['shape'] = opt.shape
             attrs['dtype'] = opt.dtype
-            node = graph.make_node('fetch', [layer_name], [], attrs, None,
-                                   layer_name)
+            node = graph.make_node('fetch', [layer_name], [], attrs, layer_name)
             graph.output_nodes.append(node)
     if isinstance(op, Operator):
         layer_name = op.input('X')[0]
@@ -59,8 +57,7 @@ def add_output_node(graph, output_spec=None, op=None, block=None):
         attrs = {}
         attrs['shape'] = var.shape
         attrs['dtype'] = var.dtype
-        node = graph.make_node(op.type, [layer_name], [], attrs, block,
-                               layer_name)
+        node = graph.make_node(op.type, [layer_name], [], attrs, layer_name)
         graph.output_nodes.append(node)
     return graph
 
@@ -68,8 +65,9 @@ def add_output_node(graph, output_spec=None, op=None, block=None):
 def build_single_graph(block,
                        parameters=None,
                        input_spec=None,
-                       output_spec=None):
-    graph = Graph(block.idx)
+                       output_spec=None,
+                       opset_version=None):
+    graph = Graph(block.idx, opset_version)
 
     if parameters is not None:
         graph.set_parameters(parameters)
@@ -89,26 +87,34 @@ def build_single_graph(block,
                 inputs[ipt] = op.input(ipt)
             for opt in op.output_names:
                 outputs[opt] = op.output(opt)
-            node = graph.make_node(op.type, inputs, outputs,
-                                   op.all_attrs(), block)
+            node = graph.make_paddle_node(op, inputs, outputs,
+                                          op.all_attrs(), block)
+    graph.generate_topo_sort()
     return graph
 
 
-def build_graph(program, parameters, input_spec=None, output_spec=None):
+def build_graph(program,
+                parameters,
+                input_spec=None,
+                output_spec=None,
+                opset_version=None):
     graphs = {}
 
-    #if len(program.blocks) > 1:
-    #    raise Exception('Now, paddle export to onnx not support model with multiple blocks.')
+    if len(program.blocks) > 1:
+        raise Exception(
+            'Now, paddle export to onnx not support model with multiple blocks.')
 
     # TODO support parse parameters for model with multiple blocks 
     for block in program.blocks:
         if block.idx == 0:
-            graph = build_single_graph(block, parameters, input_spec,
-                                       output_spec)
+            graph = build_single_graph(
+                block,
+                parameters,
+                input_spec,
+                output_spec,
+                opset_version=opset_version)
         else:
-            graph = build_single_graph(block)
-
-        graph.get_edge_map()
+            graph = build_single_graph(block, opset_version=opset_version)
         graphs[block.idx] = graph
 
         if block.parent_idx in graphs:

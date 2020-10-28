@@ -16,7 +16,7 @@ from __future__ import absolute_import
 
 import numpy as np
 from paddle2onnx.constant import dtypes
-from paddle2onnx.op_mapper import OpMapper as op_mapper
+from paddle2onnx.mapper.op_mapper import OpMapper as op_mapper
 
 MAX_FLOAT32 = np.asarray(
     [255, 255, 127, 127], dtype=np.uint8).view(np.float32)[0]

@@ -21,3 +21,4 @@ PRODUCER = 'PaddlePaddle'
 class NodeDomain(Enum):
     ONNX = 'onnx'
     PADDLE = 'paddle'
+    CUSTOM = 'custom'

@@ -15,14 +15,13 @@ from __future__ import absolute_import
 
 __version__ = "0.4"
 
+from .graph import node as node
+from .program2onnx import convert_program_to_onnx
+from .onnx_helper import helper
+
 import paddle
 v0, v1, v2 = paddle.__version__.split('.')
 if v0 == '0' and v1 == '0' and v2 == '0':
-    from .convert import convert_dygraph_to_onnx
+    from .dygraph2onnx import convert_dygraph_to_onnx
 elif int(v0) > 2:
-    from .convert import convert_dygraph_to_onnx
-
-from . import graph
-from .op_mapper import onnx_opset
-from .convert_program import convert_program_to_onnx
-from .onnx_helper import helper
+    from .dygraph2onnx import convert_dygraph_to_onnx

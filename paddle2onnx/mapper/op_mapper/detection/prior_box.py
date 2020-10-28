@@ -17,7 +17,7 @@ from __future__ import absolute_import
 import math
 import numpy as np
 from paddle2onnx.constant import dtypes
-from paddle2onnx.op_mapper import OpMapper as op_mapper
+from paddle2onnx.mapper.op_mapper import OpMapper as op_mapper
 
 
 def expand_aspect_rations(input_aspect_ratior, flip):

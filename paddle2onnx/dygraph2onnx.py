@@ -23,9 +23,10 @@ from paddle.fluid.framework import Variable
 from paddle.fluid.dygraph.dygraph_to_static import program_translator
 from paddle.fluid import dygraph
 from paddle2onnx import utils
-import paddle2onnx.onnx_helper as onnx
 from paddle2onnx.constant import PRODUCER
-from paddle2onnx.graph import graph_to_onnx, build_graph
+from paddle2onnx.graph import build_graph
+import paddle2onnx.onnx_helper as onnx
+from paddle2onnx.mapper.graph_mapper import mapping_graph_to_onnx_proto
 
 
 def prepend_feed_ops(inference_program,
@@ -144,7 +145,10 @@ def get_inout_spec(all_vars, target_vars, return_name=False):
 
 
 @dygraph.base.switch_to_static_graph
-def build_graph_from_dygraph(layer, input_spec=None, output_spec=None):
+def build_graph_from_dygraph(layer,
+                             input_spec=None,
+                             output_spec=None,
+                             opset_version=None):
     if isinstance(layer, dygraph.TranslatedLayer):
         program = layer.program()
         parameters_dict = {}
@@ -161,7 +165,8 @@ def build_graph_from_dygraph(layer, input_spec=None, output_spec=None):
                     'shape': param.shape
                 }
         graph = build_graph(program, parameters_dict,
-                            layer._input_spec(), layer._output_spec())
+                            layer._input_spec(),
+                            layer._output_spec(), opset_version)
         return graph
     elif isinstance(layer, Layer):
 
@@ -184,7 +189,8 @@ def build_graph_from_dygraph(layer, input_spec=None, output_spec=None):
                     'dtype': param.dtype,
                     'shape': param.shape
                 }
-        graph = build_graph(program, parameters_dict)
+        graph = build_graph(
+            program, parameters_dict, opset_version=opset_version)
         return graph
     else:
         raise TypeError(
@@ -250,28 +256,18 @@ def convert_dygraph_to_onnx(layer,
                 "The 'enable_onnx_checker' should be 'bool', but received type is %s."
                 % type(kwargs['enable_onnx_checker']))
 
-    graph = build_graph_from_dygraph(layer, inner_input_spec, output_spec)
+    graph = build_graph_from_dygraph(layer, inner_input_spec, output_spec,
+                                     opset_version)
 
-    from paddle2onnx.graph.mir import IfElsePass
-
-    pass_1 = IfElsePass()
-    result = pass_1.passing(graph)
-
-    onnx_graphs = graph_to_onnx(graph, opset_version, verbose=verbose)
-
-    onnx_graph = onnx_graphs[0]
-
-    opset_imports = [onnx.helper.make_opsetid("", opset_version)]
-    onnx_model = onnx.helper.make_model(
-        onnx_graph, producer_name=PRODUCER, opset_imports=opset_imports)
+    onnx_proto = mapping_graph_to_onnx_proto(graph, verbose)
 
     if enable_onnx_checker:
-        utils.check_model(onnx_model)
+        utils.check_model(onnx_proto)
 
     path, _ = os.path.split(save_dir)
     if path != '' and not os.path.isdir(path):
         os.makedirs(path)
     with open(save_dir, 'wb') as f:
-        f.write(onnx_model.SerializeToString())
+        f.write(onnx_proto.SerializeToString())
 
     print("ONNX model saved in {}".format(save_dir))
