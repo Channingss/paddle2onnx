@@ -43,6 +43,7 @@ bool ConfigParser::DetParser(const YAML::Node &det_config) {
     //arch support value:YOLO, SSD, RetinaNet, RCNN, Face
     if(det_config["arch"].IsDefined()) {
         config_["model_name"] = det_config["arch"].as<std::string>();
+        std::cout << config_["model_name"] << std::endl;
     }
     else {
         std::cerr << "Fail to find arch in PaddleDection yaml file" << std::endl;
@@ -82,6 +83,9 @@ bool ConfigParser::DetParser(const YAML::Node &det_config) {
 
 bool ConfigParser::DetParserTransforms(const YAML::Node &preprocess_op) {
     if (preprocess_op["type"].as<std::string>() == "Normalize") {
+        if (preprocess_op["is_scale"].as<bool>() == true) {
+            config_["transforms"]["Convert"]["dtype"] = "float";
+        }  
         std::vector<float> mean = preprocess_op["mean"].as<std::vector<float>>();
         std::vector<float> std = preprocess_op["std"].as<std::vector<float>>();
         config_["transforms"]["Normalize"]["is_scale"] = preprocess_op["is_scale"].as<bool>();
@@ -91,9 +95,6 @@ bool ConfigParser::DetParserTransforms(const YAML::Node &preprocess_op) {
             config_["transforms"]["Normalize"]["min_val"].push_back(0);
             config_["transforms"]["Normalize"]["max_val"].push_back(255);
         }
-        if (config_["transforms"]["Normalize"]["is_scale"]) {
-            config_["transforms"]["Convert"]["dtype"] = "float";
-        }   
         return true;    
     }
     else if (preprocess_op["type"].as<std::string>() == "Permute") {
