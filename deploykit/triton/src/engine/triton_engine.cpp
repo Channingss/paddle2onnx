@@ -1,4 +1,4 @@
-// Copyright (c) 2021 TritonTriton Authors. All Rights Reserved.
+// Copyright (c) 2021 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 #pragma once
 
 #include "include/deploy/engine/triton_engine.h"
+#include <rapidjson/error/en.h>
 
 namespace nic = nvidia::inferenceserver::client;
 
@@ -43,6 +44,7 @@ std::string  DtypeToString(int dtype){
     }
  };
 };
+
 int  DtypeToInt(std::string dtype){                               
   {                                                                
     if (dtype == "FP32") {                                              
@@ -61,37 +63,58 @@ int  DtypeToInt(std::string dtype){
 };
 namespace Deploy {
 
-void TritonInferenceEngine::Init(std::string url, bool verbose=false) {
+void TritonInferenceEngine::Init(const std::string& url, bool verbose) {
   FAIL_IF_ERR(nic::InferenceServerHttpClient::Create(
-        &client_, url, verbose), unable to create client for inference)	
+        &client_, url, verbose), "error: unable to create client for inference.")	
 };
 
-void TritonInferenceEngine::Infer(nic::InferOptions options, std::vector<DataBlob> &input_blobs, std::vector<DataBlob> *output_blobs){
+nic::Error TritonInferenceEngine::GetModelMetaData(const std::string& model_name, const std::string& model_version, const nic::Headers& http_headers, rapidjson::Document* model_metadata){
+  std::string model_metadata_str;
+  FAIL_IF_ERR(client_->ModelMetadata(
+      &model_metadata_str, model_name, model_version, http_headers), "error: failed to get model metadata."); 
+  model_metadata->Parse(model_metadata_str.c_str(), model_metadata_str.size());
+
+  std::cout << model_metadata_str << std::endl;
+  if (model_metadata->HasParseError()) {
+    return  nic::Error(
+        "failed to parse JSON at" + std::to_string(model_metadata->GetErrorOffset()) +
+        ": " + std::string(GetParseError_En(model_metadata->GetParseError())));
+  }
+  return nic::Error::Success;
+}
+
+void TritonInferenceEngine::Infer(const nic::InferOptions& options, const std::vector<DataBlob> &input_blobs, std::vector<DataBlob> *output_blobs){
   nic::Headers http_headers;
   std::vector<nic::InferInput*> inputs;
-  nic::Error err;
+
+  rapidjson::Document model_metadata;
+
+  GetModelMetaData(options.model_name_, options.model_version_, http_headers, &model_metadata);
+
   for (int i = 0; i < input_blobs.size(); i++) {
       nic::InferInput* input;
-      std::cout << DtypeToString(input_blobs[i].dtype) << std::endl;
       nic::InferInput::Create(&input, input_blobs[i].name, input_blobs[i].shape, DtypeToString(input_blobs[i].dtype));
 
       std::vector<uint8_t> *data = new std::vector<uint8_t>;
       data->resize(input_blobs[i].data.size());
       memcpy(data->data(), input_blobs[i].data.data(), input_blobs[i].data.size());
 
-      std::cout << data->size() << std::endl;
-      FAIL_IF_ERR(input->AppendRaw(*data), "unable to set data for INPUT");
+      FAIL_IF_ERR(input->AppendRaw(*data), "error: unable to set data for INPUT.");
       inputs.push_back(input);
   };
 
+    const auto& output_itr = model_metadata.FindMember("outputs");
     std::vector<const nic::InferRequestedOutput*> outputs = {};
-    nic::InferRequestedOutput* output;
-    nic::InferRequestedOutput::Create(&output, "save_infer_model/scale_0.tmp_0");
-    std::shared_ptr<nic::InferRequestedOutput> output_ptr;
-    output_ptr.reset(output);
-    outputs.push_back(output_ptr.get());
+    size_t output_count = 0;
+    for (rapidjson::Value::ConstValueIterator itr = output_itr->value.Begin(); itr != output_itr->value.End(); ++itr){
+      auto output_name = (*itr)["name"].GetString();
+      nic::InferRequestedOutput* output;
+      nic::InferRequestedOutput::Create(&output, output_name);
+      outputs.push_back(output);
+    }
     nic::InferResult* results;
-    err = client_->Infer(&results, options, inputs, outputs, http_headers);
+
+    client_->Infer(&results, options, inputs, outputs, http_headers);
 
  for (const auto output: outputs) {
      std::string output_name = output->Name(); 

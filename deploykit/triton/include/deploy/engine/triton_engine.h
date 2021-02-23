@@ -18,6 +18,9 @@
 #include <string>
 #include <iostream>
 #include "http_client.h"
+#include "common.h"
+#include "rapidjson/document.h"
+#include "rapidjson/rapidjson.h"
 
 #include "include/deploy/common/blob.h"
 
@@ -34,9 +37,11 @@ namespace Deploy {
 
 class TritonInferenceEngine{
   public:
-    void Init(std::string url, std::string port,  bool verbose=false);
+    void Init(const std::string &url, bool verbose=false);
 
     void Infer(const nic::InferOptions &options, const std::vector<DataBlob> &inputs, std::vector<DataBlob> *outputs);
+
+    nic::Error GetModelMetaData(const std::string& model_name, const std::string& model_version, const nic::Headers& http_headers, rapidjson::Document* model_metadata);
 
   private:
     std::unique_ptr<nic::InferenceServerHttpClient> client_;

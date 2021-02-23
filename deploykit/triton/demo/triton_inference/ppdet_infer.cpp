@@ -54,7 +54,7 @@ int main(int argc, char** argv) {
     detpostprocess.Init(parser);
     //engine init
     Deploy::TritonInferenceEngine triton_engine;
-    triton_engine.Init(url);
+    triton_engine.Init(FLAGS_url);
 
     nic::InferOptions options(FLAGS_model_name);
     options.model_version_ = FLAGS_model_version;
