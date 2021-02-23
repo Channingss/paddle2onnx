@@ -128,4 +128,4 @@ void PaddleInferenceEngine::Infer(std::vector<DataBlob> &inputs, std::vector<Dat
 }
 
     
-}
+}//namespace

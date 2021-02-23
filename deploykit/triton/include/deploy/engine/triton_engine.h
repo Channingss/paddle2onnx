@@ -17,11 +17,10 @@
 #include <vector>
 #include <string>
 #include <iostream>
+#include "http_client.h"
 
 #include "include/deploy/common/blob.h"
 
-#include "http_client.h"
-//#include "common.h"
 
 #ifdef _WIN32
 #define OS_PATH_SEP "\\"
@@ -33,26 +32,14 @@ namespace nic = nvidia::inferenceserver::client;
 
 namespace Deploy {
 
-// paddle inference lib config class
-struct TritonInferenceConfig
-{
-    //Whether to use mkdnn accelerator library when deploying on CPU
-    std::string url = "localhost:8000";
-
-    std::string port = "8000";
-
-    bool verbose = false; 
-};
-
 class TritonInferenceEngine{
   public:
-    void Init(std::string model_dir, TritonInferenceConfig &config);
+    void Init(std::string url, std::string port,  bool verbose=false);
 
-    void Infer(std::vector<DataBlob> &inputs, std::vector<DataBlob> *outputs);
+    void Infer(const nic::InferOptions &options, const std::vector<DataBlob> &inputs, std::vector<DataBlob> *outputs);
 
   private:
     std::unique_ptr<nic::InferenceServerHttpClient> client_;
-
 };
 
 }

@@ -28,7 +28,9 @@
 #include <opencv2/imgproc/imgproc.hpp>
 
 
-DEFINE_string(model_dir, "", "Path of inference model");
+DEFINE_string(model_name, "", "Path of inference model");
+DEFINE_string(url, "", "url of triton server");
+DEFINE_string(model_version, "", "model version of triton server");
 DEFINE_string(cfg_file, "", "Path of yaml file");
 DEFINE_string(image, "", "Path of test image file");
 DEFINE_string(image_list, "", "Path of test image list file");
@@ -51,9 +53,12 @@ int main(int argc, char** argv) {
     Deploy::PaddleDetPostProc detpostprocess;
     detpostprocess.Init(parser);
     //engine init
-    Deploy::TritonInferenceEngine ppi_engine;
-    Deploy::TritonInferenceConfig ppi_config;
-    ppi_engine.Init(FLAGS_model_dir, ppi_config);
+    Deploy::TritonInferenceEngine triton_engine;
+    triton_engine.Init(url);
+
+    nic::InferOptions options(FLAGS_model_name);
+    options.model_version_ = FLAGS_model_version;
+
     if (FLAGS_image_list != "") {
         //img_list
     } else {
@@ -69,9 +74,9 @@ int main(int argc, char** argv) {
         detpreprocess.Run(imgs, &inputs, &shape_traces);
         //infer
         std::vector<Deploy::DataBlob> outputs;
-        ppi_engine.Infer(inputs, &outputs);
+        triton_engine.Infer(options, inputs, &outputs);
         //postprocess
-        //std::vector<Deploy::PaddleDetResult> detresults;
+        std::vector<Deploy::PaddleDetResult> detresults;
         //detpostprocess.Run(outputs, shape_traces, &detresults);
     }
 }
