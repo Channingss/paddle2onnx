@@ -28,96 +28,142 @@ namespace nic = nvidia::inferenceserver::client;
     }                                                              \
   }
 
-std::string  DtypeToString(int dtype){                               
-  {                                                                
-    if (dtype == 0) {                                              
-      return "FP32";                                               
-    }                                                              
-    else if (dtype == 1) {                                         
-      return "INT64";                                              
-    }                                                              
-    else if (dtype == 2) {                                         
-      return "INT32";                                               
-    }                                                              
-    else if (dtype == 3) {                                         
-      return "UINT8";                                              
-    }
- };
-};
 
-int  DtypeToInt(std::string dtype){                               
-  {                                                                
-    if (dtype == "FP32") {                                              
-      return 0;                                               
-    }                                                              
-    else if (dtype == "INT64") {                                         
-      return 1;                                              
-    }                                                              
-    else if (dtype == "INT32") {                                         
-      return 2;                                               
-    }                                                              
-    else if (dtype == "UINT8") {                                         
-      return 3;                                              
-    }
- };
-};
 namespace Deploy {
+
+std::string  DtypeToString(int dtype) {
+    if (dtype == 0) {
+      return "FP32";
+    } else if (dtype == 1) {
+      return "INT64";
+    } else if (dtype == 2) {
+      return "INT32";
+    } else if (dtype == 3) {
+      return "UINT8";
+    }
+}
+
+int  DtypeToInt(std::string dtype) {
+    if (dtype == "FP32") {
+      return 0;
+    } else if (dtype == "INT64") {
+      return 1;
+    } else if (dtype == "INT32") {
+      return 2;
+    } else if (dtype == "UINT8") {
+      return 3;
+    }
+}
 
 void TritonInferenceEngine::Init(const std::string& url, bool verbose) {
   FAIL_IF_ERR(nic::InferenceServerHttpClient::Create(
-        &client_, url, verbose), "error: unable to create client for inference.")	
-};
+        &client_, url, verbose),
+        "error: unable to create client for inference.")
+}
 
-nic::Error TritonInferenceEngine::GetModelMetaData(const std::string& model_name, const std::string& model_version, const nic::Headers& http_headers, rapidjson::Document* model_metadata){
+nic::Error TritonInferenceEngine::GetModelMetaData(
+        const std::string& model_name,
+        const std::string& model_version,
+        const nic::Headers& http_headers,
+        rapidjson::Document* model_metadata) {
   std::string model_metadata_str;
   FAIL_IF_ERR(client_->ModelMetadata(
-      &model_metadata_str, model_name, model_version, http_headers), "error: failed to get model metadata."); 
+      &model_metadata_str, model_name, model_version, http_headers),
+          "error: failed to get model metadata.");
   model_metadata->Parse(model_metadata_str.c_str(), model_metadata_str.size());
 
   std::cout << model_metadata_str << std::endl;
   if (model_metadata->HasParseError()) {
     return  nic::Error(
-        "failed to parse JSON at" + std::to_string(model_metadata->GetErrorOffset()) +
+        "failed to parse JSON at" +
+        std::to_string(model_metadata->GetErrorOffset()) +
         ": " + std::string(GetParseError_En(model_metadata->GetParseError())));
   }
   return nic::Error::Success;
 }
 
-void TritonInferenceEngine::Infer(const nic::InferOptions& options, const std::vector<DataBlob> &input_blobs, std::vector<DataBlob> *output_blobs){
-  nic::Headers http_headers;
-  std::vector<nic::InferInput*> inputs;
-
-  rapidjson::Document model_metadata;
-
-  GetModelMetaData(options.model_name_, options.model_version_, http_headers, &model_metadata);
-
+//void  TritonInferenceEngine::CreateInput(const std::vector<DataBlob> &input_blobs, std::vector<nic::InferInput*>* inputs){
+void TritonInferenceEngine::CreateInput(const std::vector<DataBlob> &input_blobs, std::vector<nic::InferInput*>* inputs, std::vector<std::vector<uint8_t>>* input_datas){
   for (int i = 0; i < input_blobs.size(); i++) {
-      nic::InferInput* input;
-      nic::InferInput::Create(&input, input_blobs[i].name, input_blobs[i].shape, DtypeToString(input_blobs[i].dtype));
-
-      std::vector<uint8_t> *data = new std::vector<uint8_t>;
+      std::vector<uint8_t>* data;;
       data->resize(input_blobs[i].data.size());
-      memcpy(data->data(), input_blobs[i].data.data(), input_blobs[i].data.size());
+      memcpy(
+              data->data(),
+              input_blobs[i].data.data(),
+              input_blobs[i].data.size());
+      input_datas->push_back(*data);
 
-      FAIL_IF_ERR(input->AppendRaw(*data), "error: unable to set data for INPUT.");
-      inputs.push_back(input);
-  };
+      nic::InferInput* input;
+      nic::InferInput::Create(
+              &input,
+              input_blobs[i].name,
+              input_blobs[i].shape,
+              DtypeToString(input_blobs[i].dtype));
+      FAIL_IF_ERR(
+              input->AppendRaw((*input_datas)[i]),
+              "error: unable to set data for INPUT.");
+      inputs->push_back(input);
+  }
+}
 
+void TritonInferenceEngine::CreateOutput(const rapidjson::Document& model_metadata, std::vector<const nic::InferRequestedOutput*>* outputs){
     const auto& output_itr = model_metadata.FindMember("outputs");
-    std::vector<const nic::InferRequestedOutput*> outputs = {};
     size_t output_count = 0;
-    for (rapidjson::Value::ConstValueIterator itr = output_itr->value.Begin(); itr != output_itr->value.End(); ++itr){
+    for (rapidjson::Value::ConstValueIterator itr = output_itr->value.Begin();
+            itr != output_itr->value.End();
+            ++itr) {
       auto output_name = (*itr)["name"].GetString();
       nic::InferRequestedOutput* output;
       nic::InferRequestedOutput::Create(&output, output_name);
-      outputs.push_back(output);
+      outputs->push_back(std::move(output));
     }
+}
+
+void TritonInferenceEngine::Infer(
+        const nic::InferOptions& options,
+        const std::vector<DataBlob> &input_blobs,
+        std::vector<DataBlob> *output_blobs) {
+  nic::Headers http_headers;
+  std::vector<nic::InferInput*> inputs;
+
+  std::vector<std::vector<uint8_t>> input_datas(input_blobs.size());
+  //std::vector<std::vector<uint8_t>> input_datas;
+
+
+  rapidjson::Document model_metadata;
+
+  GetModelMetaData(
+          options.model_name_,
+          options.model_version_,
+          http_headers,
+          &model_metadata);
+
+  //CreateInput(input_blobs, &inputs);
+  CreateInput(input_blobs, &inputs, &input_datas);
+  /*
+  for (int i = 0; i < input_blobs.size(); i++) {
+      nic::InferInput* input;
+      nic::InferInput::Create(
+              &input,
+              input_blobs[i].name,
+              input_blobs[i].shape,
+              DtypeToString(input_blobs[i].dtype));
+      FAIL_IF_ERR(
+              input->AppendRaw(input_datas[i]),
+              "error: unable to set data for INPUT.");
+      inputs.push_back(input);
+  }*/
+
+  std::vector<const nic::InferRequestedOutput*> outputs;
+
+  CreateOutput(model_metadata,&outputs);
+
     nic::InferResult* results;
 
     client_->Infer(&results, options, inputs, outputs, http_headers);
 
  for (const auto output: outputs) {
-     std::string output_name = output->Name(); 
+     std::string output_name = output->Name();
      DataBlob *output_blob = new DataBlob();
      output_blob->name = output->Name();
      results->Shape(output->Name(), &output_blob->shape);
@@ -149,7 +195,6 @@ void TritonInferenceEngine::Infer(const nic::InferOptions& options, const std::v
 
      memcpy(output_blob->data.data(), output_data, size*sizeof(float));
 
-     // output_blobs->push_back(std::move(*output_blob));
      float* tmp = (float*)output_blob->data.data();
      for (int i=0; i< 12; i++){
      if (i%6==0){
@@ -157,7 +202,9 @@ void TritonInferenceEngine::Infer(const nic::InferOptions& options, const std::v
      }
      std::cout << tmp[i] << std::endl;
      }
+     output_blobs->push_back(std::move(*output_blob));
   }
-};
+
+}
 
 }

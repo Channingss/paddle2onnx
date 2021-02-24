@@ -70,13 +70,31 @@ int main(int argc, char** argv) {
         //create inpus and shape_traces
         std::vector<Deploy::ShapeInfo> shape_traces;
         std::vector<Deploy::DataBlob> inputs;
-        //preprocess 
+        //preprocess
         detpreprocess.Run(imgs, &inputs, &shape_traces);
         //infer
         std::vector<Deploy::DataBlob> outputs;
         triton_engine.Infer(options, inputs, &outputs);
         //postprocess
-        std::vector<Deploy::PaddleDetResult> detresults;
-        //detpostprocess.Run(outputs, shape_traces, &detresults);
+        std::vector<Deploy::PaddleDetResult> det_results;
+        detpostprocess.Run(outputs, shape_traces, &det_results);
+
+        for (int i=0; i< det_results.size(); i++) {
+          auto res = det_results[i];
+          for (int j=0; j< res.boxes.size(); j++) {
+            auto box = res.boxes[j];
+            if (box.score < 0.3){
+                break;
+            }
+            std::string result_log;
+            result_log += "class_id: " + std::to_string(box.category_id) + ", ";
+            result_log += "score: " + std::to_string(box.score) + ", ";
+            result_log += "coordinate[x:" + std::to_string(box.coordinate[0]);
+            result_log += ", y:" + std::to_string(box.coordinate[1]);
+            result_log += ", w:" + std::to_string(box.coordinate[2]);
+            result_log += ", h:" + std::to_string(box.coordinate[3]) + "]";
+            std::cout << result_log << std::endl;
+            }
+        }
     }
 }

@@ -32,6 +32,12 @@ bool PaddleDetPostProc::Run(const std::vector<DataBlob> &outputs, const std::vec
     det_results->clear();
     DataBlob output_blob = outputs[0];
     float *output_data = (float*)(output_blob.data.data());
+
+    if (output_blob.lod.empty()){
+       std::vector<size_t> lod = {0, output_blob.data.size()/sizeof(float)};
+       output_blob.lod.push_back(lod);
+    }
+
     auto lod_vector = output_blob.lod;
     int batchsize = shape_traces.size();
     //box postprocess

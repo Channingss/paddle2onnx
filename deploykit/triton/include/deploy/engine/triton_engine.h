@@ -37,14 +37,22 @@ namespace Deploy {
 
 class TritonInferenceEngine{
   public:
-    void Init(const std::string &url, bool verbose=false);
+    void Init(const std::string& url, bool verbose=false);
 
-    void Infer(const nic::InferOptions &options, const std::vector<DataBlob> &inputs, std::vector<DataBlob> *outputs);
-
-    nic::Error GetModelMetaData(const std::string& model_name, const std::string& model_version, const nic::Headers& http_headers, rapidjson::Document* model_metadata);
+    void Infer(const nic::InferOptions& options, const std::vector<DataBlob>& inputs, std::vector<DataBlob> *outputs);
 
   private:
     std::unique_ptr<nic::InferenceServerHttpClient> client_;
+
+    //std::vector<uint8_t*> input_datas;
+    //std::vector<std::vector<uint8_t>> input_datas(2);
+
+    void CreateInput(const std::vector<DataBlob> &input_blobs, std::vector<nic::InferInput*>* inputs, std::vector<std::vector<uint8_t>>* input_datas);
+    void CreateInput(const std::vector<DataBlob> &input_blobs, std::vector<nic::InferInput*>* inputs);
+
+    void CreateOutput(const rapidjson::Document& model_metadata, std::vector<const nic::InferRequestedOutput*>* outputs);
+
+    nic::Error GetModelMetaData(const std::string& model_name, const std::string& model_version, const nic::Headers& http_headers, rapidjson::Document* model_metadata);
 };
 
 }
