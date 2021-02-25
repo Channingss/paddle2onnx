@@ -14,7 +14,7 @@ GFLAGS_DIR=$(pwd)/deps/gflags/
 rm -rf build
 mkdir -p build
 cd build
-cmake .. \
+cmake ../demo/triton_inference/ \
     -DTRITON_DIR=${TRITON_DIR} \
     -DWITH_STATIC_LIB=${WITH_STATIC_LIB} \
     -DOPENCV_DIR=${OPENCV_DIR}  \

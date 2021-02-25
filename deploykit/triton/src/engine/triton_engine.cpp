@@ -64,11 +64,11 @@ void TritonInferenceEngine::Init(const std::string& url, bool verbose) {
 nic::Error TritonInferenceEngine::GetModelMetaData(
         const std::string& model_name,
         const std::string& model_version,
-        const nic::Headers& http_headers,
+        const nic::Headers& headers,
         rapidjson::Document* model_metadata) {
   std::string model_metadata_str;
   FAIL_IF_ERR(client_->ModelMetadata(
-      &model_metadata_str, model_name, model_version, http_headers),
+      &model_metadata_str, model_name, model_version, headers),
           "error: failed to get model metadata.");
   model_metadata->Parse(model_metadata_str.c_str(), model_metadata_str.size());
 
@@ -82,25 +82,17 @@ nic::Error TritonInferenceEngine::GetModelMetaData(
   return nic::Error::Success;
 }
 
-//void  TritonInferenceEngine::CreateInput(const std::vector<DataBlob> &input_blobs, std::vector<nic::InferInput*>* inputs){
-void TritonInferenceEngine::CreateInput(const std::vector<DataBlob> &input_blobs, std::vector<nic::InferInput*>* inputs, std::vector<std::vector<uint8_t>>* input_datas){
+void  TritonInferenceEngine::CreateInput(const std::vector<DataBlob> &input_blobs, std::vector<nic::InferInput*>* inputs){
   for (int i = 0; i < input_blobs.size(); i++) {
-      std::vector<uint8_t>* data;;
-      data->resize(input_blobs[i].data.size());
-      memcpy(
-              data->data(),
-              input_blobs[i].data.data(),
-              input_blobs[i].data.size());
-      input_datas->push_back(*data);
-
       nic::InferInput* input;
       nic::InferInput::Create(
               &input,
               input_blobs[i].name,
               input_blobs[i].shape,
               DtypeToString(input_blobs[i].dtype));
+
       FAIL_IF_ERR(
-              input->AppendRaw((*input_datas)[i]),
+              input->AppendRaw(reinterpret_cast<const uint8_t*>(&input_blobs[i].data[0]), input_blobs[i].data.size()),
               "error: unable to set data for INPUT.");
       inputs->push_back(input);
   }
@@ -119,90 +111,61 @@ void TritonInferenceEngine::CreateOutput(const rapidjson::Document& model_metada
     }
 }
 
-void TritonInferenceEngine::Infer(
-        const nic::InferOptions& options,
-        const std::vector<DataBlob> &input_blobs,
-        std::vector<DataBlob> *output_blobs) {
-  nic::Headers http_headers;
-  std::vector<nic::InferInput*> inputs;
-
-  std::vector<std::vector<uint8_t>> input_datas(input_blobs.size());
-  //std::vector<std::vector<uint8_t>> input_datas;
-
-
+void TritonInferenceEngine::Infer(const nic::InferOptions& options, const std::vector<DataBlob>& input_blobs, std::vector<DataBlob> *output_blobs, const nic::Headers& headers, const nic::Parameters& query_params){
+//void TritonInferenceEngine::Infer(
+//        const nic::InferOptions& options,
+//        const std::vector<DataBlob> &input_blobs,
+//        std::vector<DataBlob> *output_blobs) {
   rapidjson::Document model_metadata;
-
   GetModelMetaData(
           options.model_name_,
           options.model_version_,
-          http_headers,
+          headers,
           &model_metadata);
 
-  //CreateInput(input_blobs, &inputs);
-  CreateInput(input_blobs, &inputs, &input_datas);
-  /*
-  for (int i = 0; i < input_blobs.size(); i++) {
-      nic::InferInput* input;
-      nic::InferInput::Create(
-              &input,
-              input_blobs[i].name,
-              input_blobs[i].shape,
-              DtypeToString(input_blobs[i].dtype));
-      FAIL_IF_ERR(
-              input->AppendRaw(input_datas[i]),
-              "error: unable to set data for INPUT.");
-      inputs.push_back(input);
-  }*/
+  std::vector<nic::InferInput*> inputs;
+  CreateInput(input_blobs, &inputs);
 
   std::vector<const nic::InferRequestedOutput*> outputs;
+  CreateOutput(model_metadata, &outputs);
 
-  CreateOutput(model_metadata,&outputs);
+  nic::InferResult* results;
 
-    nic::InferResult* results;
-
-    client_->Infer(&results, options, inputs, outputs, http_headers);
+  client_->Infer(&results, options, inputs, outputs, headers, query_params);
 
  for (const auto output: outputs) {
      std::string output_name = output->Name();
-     DataBlob *output_blob = new DataBlob();
-     output_blob->name = output->Name();
-     results->Shape(output->Name(), &output_blob->shape);
+     DataBlob output_blob;
+     output_blob.name = output->Name();
+     results->Shape(output->Name(), &output_blob.shape);
      std::string output_dtype;
      results->Datatype(output->Name(), &output_dtype);
-     output_blob->dtype = DtypeToInt(output_dtype);
+     output_blob.dtype = DtypeToInt(output_dtype);
+
      //output.lod = output_tensor->lod();
      int size = 1;
-     for (const auto& i : output_blob->shape) {
+     for (const auto& i : output_blob.shape) {
          size *= i;
      }
      size_t output_byte_size;
-     float* output_data; //= (float*)output_blob.data.data();
+     uint8_t* output_data;
+     results->RawData(output_blob.name, (const uint8_t**) &output_data, &output_byte_size);
 
-     results->RawData(output_blob->name, (const uint8_t**) &output_data, &output_byte_size);
-
-     if (output_blob->dtype == 0) {
-         output_blob->data.resize(size * sizeof(float));
+     if (output_blob.dtype == 0) {
+         output_blob.data.resize(size * sizeof(float));
      }
-     else if (output_blob->dtype == 1) {
-         output_blob->data.resize(size * sizeof(int64_t));
+     else if (output_blob.dtype == 1) {
+         output_blob.data.resize(size * sizeof(int64_t));
      }
-     else if (output_blob->dtype == 2) {
-         output_blob->data.resize(size * sizeof(int));
+     else if (output_blob.dtype == 2) {
+         output_blob.data.resize(size * sizeof(int));
      }
-     else if (output_blob->dtype == 3) {
-         output_blob->data.resize(size * sizeof(uint8_t));
+     else if (output_blob.dtype == 3) {
+         output_blob.data.resize(size * sizeof(uint8_t));
      }
 
-     memcpy(output_blob->data.data(), output_data, size*sizeof(float));
-
-     float* tmp = (float*)output_blob->data.data();
-     for (int i=0; i< 12; i++){
-     if (i%6==0){
-        std::cout << "box:"<< std::endl;
-     }
-     std::cout << tmp[i] << std::endl;
-     }
-     output_blobs->push_back(std::move(*output_blob));
+     memcpy(output_blob.data.data(), output_data, size*sizeof(float));
+     output_blobs->push_back(output_blob);
   }
 
 }

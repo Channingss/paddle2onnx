@@ -39,15 +39,12 @@ class TritonInferenceEngine{
   public:
     void Init(const std::string& url, bool verbose=false);
 
-    void Infer(const nic::InferOptions& options, const std::vector<DataBlob>& inputs, std::vector<DataBlob> *outputs);
+    void Infer(const nic::InferOptions& options, const std::vector<DataBlob>& input_blobs, std::vector<DataBlob> *output_blobs, const nic::Headers& headers=nic::Headers(), const nic::Parameters& query_params=nic::Parameters());
 
-  private:
     std::unique_ptr<nic::InferenceServerHttpClient> client_;
 
-    //std::vector<uint8_t*> input_datas;
-    //std::vector<std::vector<uint8_t>> input_datas(2);
+  private:
 
-    void CreateInput(const std::vector<DataBlob> &input_blobs, std::vector<nic::InferInput*>* inputs, std::vector<std::vector<uint8_t>>* input_datas);
     void CreateInput(const std::vector<DataBlob> &input_blobs, std::vector<nic::InferInput*>* inputs);
 
     void CreateOutput(const rapidjson::Document& model_metadata, std::vector<const nic::InferRequestedOutput*>* outputs);
