@@ -17,19 +17,25 @@ import os.path as osp
 import numpy as np
 from deploykit.common import DataBlob
 
-#def numpy_triton_dtype_mapping(np_dtype):
-#    if np_dtype
-NUMPY_TRTITON_DTYPE_MAPPER = {
-    np.dtype('float32'): "FP32",
-    np.dtype('float64'): "FP64",
-    np.dtype('float32'): "FP32",
-    np.dtype('float16'): "FP16",
-    np.dtype('int64'): "INT64",
-    np.dtype('int32'): "INT32",
-    np.dtype('int16'): "INT16",
-    np.dtype('bool'): "BOOL",
-}
 
+class TritonInferOptions(object):
+    def __init__(self, 
+              model_name,
+              model_version="",
+              request_id="",
+              sequence_id=0,
+              sequence_start=False,
+              sequence_end=False,
+              priority=0,
+              timeout=None):
+        self.model_name=model_name
+        self.model_version=model_version
+        self.request_id=request_id
+        self.sequence_id=sequence_id
+        self.sequence_start=sequence_start
+        self.sequence_end=sequence_end
+        self.priority=priority
+        self.timeout=timeout
 
 class TritonInferenceEngine(object):
     def __init__(self, url, ssl=False, verbose=False):
@@ -52,12 +58,11 @@ class TritonInferenceEngine(object):
             sys.exit(1)
         self.triton_client = triton_client
 
-    def infer(self, model_name, model_version, headers, input_blobs):
+    def infer(self, infer_options, input_blobs, headers=None, query_params=None):
         from tritonclient.utils import np_to_triton_dtype
         import tritonclient.http as httpclient
         try:
-            model_metadata = self.triton_client.get_model_metadata(
-                model_name=model_name, model_version=model_version)
+            model_metadata = self.triton_client.get_model_metadata(infer_options.model_name, model_version=infer_options.model_version, headers=headers)
         except InferenceServerException as e:
             print("failed to retrieve the metadata: " + str(e))
             sys.exit(1)
@@ -74,7 +79,18 @@ class TritonInferenceEngine(object):
                 httpclient.InferRequestedOutput(
                     output['name'], binary_data=False))
         results = self.triton_client.infer(
-            model_name, inputs, outputs=request_outputs, headers=headers)
+            infer_options.model_name, 
+            inputs, 
+            model_version=infer_options.model_version,
+            outputs=request_outputs, 
+              request_id=infer_options.request_id,
+              sequence_id=infer_options.sequence_id,
+              sequence_start=infer_options.sequence_start,
+              sequence_end=infer_options.sequence_end,
+              priority=infer_options.priority,
+              timeout=infer_options.timeout,
+            headers=headers,
+              query_params=query_params)
         outputs = []
         for output in model_metadata['outputs']:
             output_blob = DataBlob()

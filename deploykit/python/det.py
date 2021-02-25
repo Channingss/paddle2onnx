@@ -18,7 +18,7 @@ import os
 import os.path as osp
 
 from deploykit.common import ConfigParser
-from deploykit.engine import TritonInferenceEngine
+from deploykit.engine import TritonInferenceEngine, TritonInferOptions
 from deploykit.preprocessing import DetPreprocessor
 from deploykit.postprocessing import DetPostprocessor
 
@@ -87,8 +87,8 @@ def infer(args):
     engine = TritonInferenceEngine(args.url)
     image = cv2.imread(args.image)
     inputs, shape_info = det_preprocess([image])
-    outputs = engine.infer(args.model_name, args.model_version, headers_dict,
-                           inputs)
+    infer_options = TritonInferOptions(args.model_name, args.model_version)
+    outputs = engine.infer(infer_options, inputs)
     det_results = det_postprocess(outputs, shape_info)
     for det_result in det_results:
         for bbox in det_result.bboxes:

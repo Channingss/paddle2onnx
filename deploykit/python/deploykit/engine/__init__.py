@@ -14,4 +14,4 @@
 
 from .engine_config import PaddleInferenceConfig
 from .paddle_inference_engine import PaddleInferenceEngine
-from .triton_inference_engine import TritonInferenceEngine
+from .triton_inference_engine import TritonInferenceEngine, TritonInferOptions
