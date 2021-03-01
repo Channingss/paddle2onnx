@@ -328,9 +328,9 @@ class Range():
         start = node.input('Start', 0)
         end = node.input('End', 0)
         step = node.input('Step', 0)
-        start_t = graph.make_node('Squeeze', inputs=[start], axes=[0])
-        end_t = graph.make_node('Squeeze', inputs=[end], axes=[0])
-        step_t = graph.make_node('Squeeze', inputs=[step], axes=[0])
+        start_t = graph.make_node('Cast', graph.make_node('Squeeze', inputs=[start], axes=[0]), to=dtypes.ONNX.INT32)
+        end_t = graph.make_node('Cast', graph.make_node('Squeeze', inputs=[end], axes=[0]), to=dtypes.ONNX.INT32)
+        step_t = graph.make_node('Cast', graph.make_node('Squeeze', inputs=[step], axes=[0]), to=dtypes.ONNX.INT32)
         graph.make_node(
             "Range",
             inputs=[start_t, end_t, step_t],
@@ -354,15 +354,26 @@ class Constant():
         value = np.ones(shape) * value
         value = value.astype(dtypes.DTYPE_PADDLE_NUMPY_MAP[dtype])
         value = value.flatten().tolist()
-        graph.make_node(
-            'Constant',
-            inputs=[],
-            outputs=node.output('Out'),
-            attrs={
-                'dims': shape,
-                'dtype': dtypes.DTYPE_PADDLE_ONNX_MAP[dtype],
-                'value': value
-            })
+        if len(shape) ==0 and len(node.input('ShapeTensor')) > 0:
+            graph.make_node(
+                'ConstantOfShape',
+                inputs=node.input('ShapeTensor'),
+                outputs=node.output('Out'),
+                attrs={
+                    'dims': shape,
+                    'dtype': dtypes.DTYPE_PADDLE_ONNX_MAP[dtype],
+                    'value': value
+                })
+        else:
+            graph.make_node(
+                'Constant',
+                inputs=[],
+                outputs=node.output('Out'),
+                attrs={
+                    'dims': shape,
+                    'dtype': dtypes.DTYPE_PADDLE_ONNX_MAP[dtype],
+                    'value': value
+                })
 
 
 @op_mapper(['lookup_table_v2', 'lookup_table'])
@@ -380,7 +391,7 @@ class Embedding():
             inputs=[node.input('W', 0), ids],
             outputs=node.output('Out'))
 
-@op_mapper('fill_constant_batch_size_like')
+@op_mapper('fill_constant_batch_size_like22')
 class FillConstantBatchSizeLike():
     support_opset_verison_range = (9, 12)
 
@@ -925,12 +936,13 @@ class Resize():
                 in_shape, out_shape = cls.compute_output_shape_by_size(graph,
                                                                        node)
                 inputs += [empty_node, out_shape]
+        print('1111')
         graph.make_node(
             'Resize',
             inputs=inputs,
+            coordinate_transformation_mode = 'asymmetric',
             outputs=node.output('Out'),
-            mode=resize_type,
-            coordinate_transformation_mode=coordinate_transformation_mode)
+            nearest_mode='floor')
 
     @classmethod
     def compute_output_shape(cls, graph, node, opset_version=10):
