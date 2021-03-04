@@ -18,40 +18,25 @@ import os
 import os.path as osp
 
 from deploykit.common import ConfigParser
-from deploykit.engine import TritonInferenceEngine, TritonInferOptions
+from deploykit.engine import TensorRTInferenceEngine 
 from deploykit.preprocessing import DetPreprocessor
 from deploykit.postprocessing import DetPostprocessor
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description='Detection prediction using paddle inference engine')
+        description='Detection prediction using tensorrt inference engine')
     parser.add_argument(
         '--model_name',
         dest='model_name',
         help='Name of inference model',
         type=str)
     parser.add_argument(
-        '--url', dest='url', help='url of triton inference server', type=str)
-    parser.add_argument(
-        '--model_version',
-        dest='model_version',
-        default='',
-        help='version of inference model',
-        type=str)
-    parser.add_argument(
-        '--http_headers',
-        dest='http_headers',
-        help='http headers for request to server',
-        type=str)
+        '--model_dir', dest='model_dir', help='onnx model directory', type=str)
     parser.add_argument(
         '--cfg_file', dest='cfg_file', help='Path of yaml file', type=str)
     parser.add_argument(
-        '--pp_type',
-        dest='pp_type',
-        default='det',
-        help='Type of Paddle toolkit',
-        type=str)
+        '--pp_type', dest='pp_type', default='det', help='Type of Paddle toolkit', type=str)
     parser.add_argument(
         '--image',
         dest='image',
@@ -73,33 +58,22 @@ def parse_args():
 
 def infer(args):
     parser = ConfigParser(args.cfg_file, args.pp_type)
-
-    if args.http_headers is not None:
-        headers_dict = {
-            l.split(':')[0]: l.split(':')[1]
-            for l in args.http_headers
-        }
-    else:
-        headers_dict = None
-
     det_preprocess = DetPreprocessor(parser)
     det_postprocess = DetPostprocessor(parser)
-    engine = TritonInferenceEngine(args.url)
+    engine = TensorRTInferenceEngine(args.model_dir, trt_cache_file='tmp.trt')
     image = cv2.imread(args.image)
     inputs, shape_info = det_preprocess([image])
-    infer_options = TritonInferOptions(args.model_name, args.model_version)
-    outputs = engine.infer(infer_options, inputs)
-    det_results = det_postprocess(outputs, shape_info)
-    for det_result in det_results:
-        for bbox in det_result.bboxes:
-            if bbox.score < 0.5:
-                continue
-            print(
-                'class_id: {}, confidence: {:.04f}, left_top:[{:.02f},{:.02f}], right_bottom:[{:.02f},{:.02f}]'.
-                format(bbox.category_id, bbox.score, bbox.coordinate.xmin,
-                       bbox.coordinate.ymin, bbox.coordinate.xmax,
-                       bbox.coordinate.ymax))
-
+    outputs = engine.infer(inputs)
+    #det_results = det_postprocess(outputs, shape_info)
+    #for det_result in det_results:
+    #    for bbox in det_result.bboxes:
+    #        if bbox.score < 0.5:
+    #            continue
+    #        print(
+    #            'class_id: {}, confidence: {:.04f}, left_top:[{:.02f},{:.02f}], right_bottom:[{:.02f},{:.02f}]'.
+    #            format(bbox.category_id, bbox.score, bbox.coordinate.xmin,
+    #                   bbox.coordinate.ymin, bbox.coordinate.xmax,
+    #                   bbox.coordinate.ymax))
 
 if __name__ == '__main__':
     args = parse_args()

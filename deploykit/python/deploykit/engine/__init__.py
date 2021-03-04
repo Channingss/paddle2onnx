@@ -15,3 +15,4 @@
 from .engine_config import PaddleInferenceConfig
 from .paddle_inference_engine import PaddleInferenceEngine
 from .triton_inference_engine import TritonInferenceEngine, TritonInferOptions
+from .trt_inference_engine import TensorRTInferenceEngine
