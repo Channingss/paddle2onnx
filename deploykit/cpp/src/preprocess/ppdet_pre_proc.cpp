@@ -20,6 +20,7 @@ namespace Deploy {
 
 bool PaddleDetPreProc::Init(const ConfigParser &parser) {
   BuildTransform(parser);
+  //model_arch_ = parser.GetNode("model_name").as<std::string>();
   model_arch_ = parser.Get<std::string>("model_name");
 }
 

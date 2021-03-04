@@ -33,6 +33,11 @@ bool PaddleDetPostProc::Run(const std::vector<DataBlob> &outputs,
   det_results->clear();
   DataBlob output_blob = outputs[0];
   float *output_data = reinterpret_cast<float*>(output_blob.data.data());
+  if (output_blob.lod.empty()){
+       std::vector<size_t> lod = {0, output_blob.data.size()/sizeof(float)};
+       output_blob.lod.push_back(lod);
+    }
+
   auto lod_vector = output_blob.lod;
   // box postprocess
   for (int i = 0; i < lod_vector[0].size() - 1; ++i) {
