@@ -56,7 +56,6 @@ int  DtypeToInt(std::string dtype) {
 }
 
 void TritonInferenceEngine::Init(const std::string& url, bool verbose) {
-  std::cout <<  11 << std::endl;
   FAIL_IF_ERR(nic::InferenceServerHttpClient::Create(
         &client_, url, verbose),
         "error: unable to create client for inference.")
@@ -68,7 +67,6 @@ nic::Error TritonInferenceEngine::GetModelMetaData(
         const nic::Headers& headers,
         rapidjson::Document* model_metadata) {
   std::string model_metadata_str;
-  std::cout <<  model_version << std::endl;
   FAIL_IF_ERR(client_->ModelMetadata(
       &model_metadata_str, model_name, model_version, headers),
           "error: failed to get model metadata.");
@@ -85,11 +83,14 @@ nic::Error TritonInferenceEngine::GetModelMetaData(
 void  TritonInferenceEngine::CreateInput(const std::vector<DataBlob> &input_blobs, std::vector<nic::InferInput*>* inputs){
   for (int i = 0; i < input_blobs.size(); i++) {
       nic::InferInput* input;
-      std::vector<int64_t> input_shape(input_blobs[i].shape.begin(), input_blobs[i].shape.end());
+      std::vector<int64_t> input_shape = input_blobs[i].GetShape<int64_t>();
+    for (int j = 0; j < input_shape.size(); j++){
+        std::cout << input_shape[j] << std::endl;
+    }
       nic::InferInput::Create(
               &input,
               input_blobs[i].name,
-              input_shape,
+              input_blobs[i].GetShape<int64_t>(),
               DtypeToString(input_blobs[i].dtype));
 
       FAIL_IF_ERR(
@@ -112,7 +113,22 @@ void TritonInferenceEngine::CreateOutput(const rapidjson::Document& model_metada
     }
 }
 
-void TritonInferenceEngine::Infer(const nic::InferOptions& options, const std::vector<DataBlob>& input_blobs, std::vector<DataBlob> *output_blobs, const nic::Headers& headers, const nic::Parameters& query_params){
+void TritonInferenceEngine::ParseConfigs(const TritonInferenceConfigs &configs, nic::InferOptions* options){
+    options->model_version_ = configs.model_version_;
+    options->request_id_ = configs.request_id_;
+    options->sequence_id_ = configs.sequence_id_;
+    options->sequence_start_ = configs.sequence_start_;
+    options->sequence_end_ = configs.sequence_end_;
+    options->priority_ = configs.priority_;
+    options->server_timeout_ = configs.server_timeout_;
+    options->client_timeout_ = configs.client_timeout_;
+
+}
+
+void TritonInferenceEngine::Infer(const TritonInferenceConfigs& configs, const std::vector<DataBlob>& input_blobs, std::vector<DataBlob> *output_blobs, const nic::Headers& headers, const nic::Parameters& query_params){
+  nic::InferOptions options(configs.model_name_);
+  ParseConfigs(configs, &options);
+
   rapidjson::Document model_metadata;
   GetModelMetaData(
           options.model_name_,
@@ -127,21 +143,24 @@ void TritonInferenceEngine::Infer(const nic::InferOptions& options, const std::v
   CreateOutput(model_metadata, &outputs);
 
   nic::InferResult* results;
-
   client_->Infer(&results, options, inputs, outputs, headers, query_params);
 
  for (const auto output: outputs) {
      std::string output_name = output->Name();
+
      DataBlob output_blob;
      output_blob.name = output->Name();
 
-     std::vector<int64_t> output_shape(output_blob.shape.begin(), output_blob.shape.end());
+     std::vector<int64_t> output_shape;
      results->Shape(output->Name(), &output_shape);
+     output_blob.SetShape(output_shape);
+
      std::string output_dtype;
      results->Datatype(output->Name(), &output_dtype);
      output_blob.dtype = DtypeToInt(output_dtype);
 
-     //output.lod = output_tensor->lod();
+     // TODO: set output.lod when batch_size >1; 
+     
      int size = 1;
      for (const auto& i : output_blob.shape) {
          size *= i;

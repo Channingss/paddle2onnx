@@ -23,8 +23,8 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include "yaml-cpp/yaml.h"
 
-#include "include/deploy/postprocess/ppdet_post_proc.h"
-#include "include/deploy/preprocess/ppdet_pre_proc.h"
+#include "include/deploy/postprocess/ppocr_post_proc.h"
+#include "include/deploy/preprocess/ppocr_pre_proc.h"
 #include "include/deploy/engine/triton_engine.h"
 
 
@@ -34,7 +34,8 @@ DEFINE_string(model_version, "", "model version of triton server");
 DEFINE_string(cfg_file, "", "Path of yaml file");
 DEFINE_string(image, "", "Path of test image file");
 DEFINE_string(image_list, "", "Path of test image list file");
-DEFINE_string(pptype, "det", "Type of PaddleToolKit");
+DEFINE_int32(batch_size, 1, "Batch size of infering");
+DEFINE_string(toolkit, "ocr", "Type of PaddleToolKit");
 
 
 int main(int argc, char** argv) {
@@ -42,15 +43,15 @@ int main(int argc, char** argv) {
     google::ParseCommandLineFlags(&argc, &argv, true);
     //parser yaml file
     Deploy::ConfigParser parser;
-    parser.Load(FLAGS_cfg_file, FLAGS_pptype);
+    parser.Load(FLAGS_cfg_file, FLAGS_toolkit);
 
     // data preprocess
     // preprocess init
-    Deploy::PaddleDetPreProc detpreprocess;
-    detpreprocess.Init(parser);
+    Deploy::PaddleOcrPreProc preprocess;
+    preprocess.Init(parser);
     // postprocess init
-    Deploy::PaddleDetPostProc detpostprocess;
-    detpostprocess.Init(parser);
+    Deploy::PaddleOcrPostProc postprocess;
+    postprocess.Init(parser);
     //engine init
     Deploy::TritonInferenceEngine triton_engine;
     triton_engine.Init(FLAGS_url);
@@ -66,44 +67,29 @@ int main(int argc, char** argv) {
         std::cerr << "Fail to open file " << FLAGS_image_list << std::endl;
         return -1;
       }
-       // predict image list with batch_size == 1 
+       // Mini-batch predict
        std::string image_path;
        std::vector<std::string> image_paths;
        while (getline(inf, image_path)) {
          image_paths.push_back(image_path);
        }
       imgs = image_paths.size();
-      std::vector<cv::Mat> im_vec(1);
-      for (int i = 0; i < image_paths.size(); i += 1) {
-        im_vec[0] = std::move(cv::imread(image_paths[i], 1));
+      for (int i = 0; i < image_paths.size(); i += FLAGS_batch_size) {
+        int im_vec_size = std::min(static_cast<int>(image_paths.size()), i + FLAGS_batch_size);
+        std::vector<cv::Mat> im_vec(im_vec_size - i);
+        for (int j = i; j < im_vec_size; ++j) {
+        im_vec[j - i] = std::move(cv::imread(image_paths[j], 1));
+      }
         std::vector<Deploy::ShapeInfo> shape_traces;
         std::vector<Deploy::DataBlob> inputs;
         //preprocess
-        detpreprocess.Run(im_vec, &inputs, &shape_traces);
+        preprocess.Run(im_vec, &inputs, &shape_traces);
         //infer
         std::vector<Deploy::DataBlob> outputs;
         triton_engine.Infer(configs, inputs, &outputs);
         //postprocess
-        std::vector<Deploy::PaddleDetResult> det_results;
-        detpostprocess.Run(outputs, shape_traces, &det_results);
-
-        for (int i=0; i< det_results.size(); i++) {
-          auto res = det_results[i];
-          for (int j=0; j< res.boxes.size(); j++) {
-            auto box = res.boxes[j];
-            if (box.score < 0.5){
-                break;
-            }
-            std::string result_log;
-            result_log += "class_id: " + std::to_string(box.category_id) + ", ";
-            result_log += "score: " + std::to_string(box.score) + ", ";
-            result_log += "coordinate[x:" + std::to_string(box.coordinate[0]);
-            result_log += ", y:" + std::to_string(box.coordinate[1]);
-            result_log += ", w:" + std::to_string(box.coordinate[2]);
-            result_log += ", h:" + std::to_string(box.coordinate[3]) + "]";
-            std::cout << result_log << std::endl;
-            }
-        }
+        std::vector<Deploy::PaddleOcrResult> results;
+        postprocess.Run(outputs, shape_traces, &results);
     }
     } else {
         //read image
@@ -115,30 +101,12 @@ int main(int argc, char** argv) {
         std::vector<Deploy::ShapeInfo> shape_traces;
         std::vector<Deploy::DataBlob> inputs;
         //preprocess
-        detpreprocess.Run(imgs, &inputs, &shape_traces);
+        preprocess.Run(imgs, &inputs, &shape_traces);
         //infer
         std::vector<Deploy::DataBlob> outputs;
         triton_engine.Infer(configs, inputs, &outputs);
         //postprocess
-        std::vector<Deploy::PaddleDetResult> det_results;
-        detpostprocess.Run(outputs, shape_traces, &det_results);
-
-        for (int i=0; i< det_results.size(); i++) {
-          auto res = det_results[i];
-          for (int j=0; j< res.boxes.size(); j++) {
-            auto box = res.boxes[j];
-            if (box.score < 0.5){
-                break;
-            }
-            std::string result_log;
-            result_log += "class_id: " + std::to_string(box.category_id) + ", ";
-            result_log += "score: " + std::to_string(box.score) + ", ";
-            result_log += "coordinate[x:" + std::to_string(box.coordinate[0]);
-            result_log += ", y:" + std::to_string(box.coordinate[1]);
-            result_log += ", w:" + std::to_string(box.coordinate[2]);
-            result_log += ", h:" + std::to_string(box.coordinate[3]) + "]";
-            std::cout << result_log << std::endl;
-            }
-        }
+        std::vector<Deploy::PaddleOcrResult> results;
+        postprocess.Run(outputs, shape_traces, &results);
     }
 }
