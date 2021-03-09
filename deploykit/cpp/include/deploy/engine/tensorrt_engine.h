@@ -20,14 +20,17 @@
 #include <vector>
 #include <map>
 
+#include <glog/logging.h>
+
 #include "NvInfer.h"
 
+#include "NvOnnxConfig.h"
+#include "NvOnnxParser.h"
 #include "include/deploy/common/blob.h"
 #include "include/deploy/engine/tensorrt/buffers.h"
 
 namespace Deploy {
 
-using InferUniquePtr = std::unique_ptr<T, InferDeleter>;
 using Severity = nvinfer1::ILogger::Severity;
 
 struct InferDeleter {
@@ -38,22 +41,9 @@ struct InferDeleter {
   }
 };
 
-struct TensorRTInferenceConfigs {
-  void AnalysisConfig::SetTRTDynamicShapeInfo(
-      std::map<std::string, std::vector<int>> min_input_shape,
-      std::map<std::string, std::vector<int>> max_input_shape,
-      std::map<std::string, std::vector<int>> optim_input_shape) {
-    min_input_shape_ = min_input_shape;
-    max_input_shape_ = max_input_shape;
-    optim_input_shape_ = optim_input_shape;
-  }
+template <typename T>
+using InferUniquePtr = std::unique_ptr<T, InferDeleter>;
 
- protected:
-  nvinfer1::ILogger &logger nvinfer1::ILogger &logger = NaiveLogger.Global();
-  std::map<std::string, std::vector<int>> min_input_shape_{};
-  std::map<std::string, std::vector<int>> max_input_shape_{};
-  std::map<std::string, std::vector<int>> optim_input_shape_{};
-};
 
 // A logger for create TensorRT infer builder.
 class NaiveLogger : public nvinfer1::ILogger {
@@ -78,16 +68,35 @@ class NaiveLogger : public nvinfer1::ILogger {
     }
   }
 
-  static nvinfer1::ILogger &Global() {
-    static nvinfer1::ILogger *x = new NaiveLogger;
+  static  NaiveLogger& Global() {
+    static NaiveLogger *x = new NaiveLogger;
     return *x;
   }
 
   ~NaiveLogger() override {}
 
- private:
   Severity mReportableSeverity;
 };
+
+struct TensorRTInferenceConfigs {
+  void SetTRTDynamicShapeInfo(
+      std::map<std::string, std::vector<int>> min_input_shape,
+      std::map<std::string, std::vector<int>> max_input_shape,
+      std::map<std::string, std::vector<int>> optim_input_shape) {
+    min_input_shape_ = min_input_shape;
+    max_input_shape_ = max_input_shape;
+    optim_input_shape_ = optim_input_shape;
+  }
+
+ public:
+  NaiveLogger &logger_ = NaiveLogger::Global();
+
+ protected:
+  std::map<std::string, std::vector<int>> min_input_shape_{};
+  std::map<std::string, std::vector<int>> max_input_shape_{};
+  std::map<std::string, std::vector<int>> optim_input_shape_{};
+};
+
 
 class TensorRTInferenceEngine {
  public:
@@ -96,18 +105,19 @@ class TensorRTInferenceEngine {
             TensorRTInferenceConfigs configs = TensorRTInferenceConfigs());
 
   void Infer(const std::vector<DataBlob> &input_blobs,
+             const int batch_size,
              std::vector<DataBlob> *output_blobs);
 
-  std::unique_ptr<nvinfer1::ICudaEngine> engine_;
+  std::shared_ptr<nvinfer1::ICudaEngine> engine_;
 
  private:
-  void ParseConfigs(const TritonInferenceConfigs &configs,
-                    nic::InferOptions *options);
+  //void ParseConfigs(const TritonInferenceConfigs &configs,
+  //                  nic::InferOptions *options);
 
-  void FeedInput(const std::vector<DataBlob> &input_blobs,
-                 std::vector<nic::InferInput *> *inputs);
+  //void FeedInput(const std::vector<DataBlob> &input_blobs,
+  //               std::vector<nic::InferInput *> *inputs);
 
-  void FetchOutput(c std::vector<const nic::InferRequestedOutput *> *outputs);
+  //void FetchOutput(c std::vector<const nic::InferRequestedOutput *> *outputs);
 
   void ParseONNXModel(const std::string &model_dir);
 };
