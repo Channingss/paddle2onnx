@@ -173,7 +173,6 @@ class TensorRTInferenceEngine(object):
         need_config_input_shape = False
         for i in range(network.num_inputs):
             tensor = network.get_input(i)
-            print(tensor.name, tensor.shape)
             if is_dynamic_shape(tensor.shape, 1, len(tensor.shape)): 
                 if tensor.name not in configs.dynamic_shape_info:
                     print("input:{} with dynamic shape {} please set configs by api:set_dynamic_shape_info.".format(tensor.name, tensor.shape))
@@ -211,9 +210,6 @@ class TensorRTInferenceEngine(object):
     def infer(self, input_blobs):
         # Do inference
         context = self.engine.create_execution_context()
-
-        #input_blobs[0].data = np.concatenate([input_blobs[0].data,input_blobs[0].data], axis=0)
-        input_blobs[0].data = input_blobs[0].data
         for i, binding_name in enumerate(self.engine):
             if self.engine.binding_is_input(binding_name):
                 binding_index = self.engine.get_binding_index(binding_name)
