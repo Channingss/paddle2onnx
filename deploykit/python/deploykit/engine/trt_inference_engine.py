@@ -24,7 +24,6 @@ import tensorrt as trt
 from itertools import chain
 import argparse
 
-TRT_LOGGER = trt.Logger()
 
 # Simple helper data class that's a little nicer to use than a 2-tuple.
 class HostDeviceMem(object):
@@ -38,12 +37,25 @@ class HostDeviceMem(object):
     def __repr__(self):
         return self.__str__()
 
-class TensorRTInferOptions(object):
-    def __init__(self, ):
-        self.dynamic_shape_info = {}
+def is_dynamic_shape(shape, begin_idx, end_idx):
+    for index in range(begin_idx, end_idx):
+        if shape[index] < 0:
+            return True
+    return False
 
-    def set_dynamic_shape_info(input_name, min_shape, opt_shape, max_shape):
-        self.dynamic_shape_info[input_name] = [min_shape, opt_shape, max_shape]
+class TensorRTInferConfigs(object):
+    def __init__(self, ):
+        self.optimize_shape_info = {}
+        self.trt_logger = trt.Logger()
+        
+    def set_shape_info(input_name, min_shape, opt_shape, max_shape):
+        if is_dynamic_shape(min_shape, 0, len(min_shape)):
+            print("error")
+        if is_dynamic_shape(opt_shape, 0, len(opt_shape)):
+            print("error")
+        if is_dynamic_shape(max_shape, 0, len(max_shape)):
+            print("error")
+        self.optimize_shape_info[input_name] = [min_shape, opt_shape, max_shape]
 
 def get_input_metadata(network):
     inputs = TensorMetadata()
@@ -51,7 +63,6 @@ def get_input_metadata(network):
         tensor = network.get_input(i)
         inputs.add(name=tensor.name, dtype=trt.nptype(tensor.dtype), shape=tensor.shape)
     return inputs
-
 
 def get_output_metadata(network):
     outputs = TensorMetadata()
@@ -64,44 +75,28 @@ class TensorRTInferenceEngine(object):
     
     EXPLICIT_BATCH = 1 << (int)(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
 
-    def __init__(self, model_dir, max_workspace_size=1<<28, trt_cache_file=None, configs=None):
-        builder = trt.Builder(TRT_LOGGER)
-        #builder.max_batch_size = 4
-        config =  builder.create_builder_config()
+    def __init__(self, model_dir, max_workspace_size, max_batch_size, trt_cache_file=None, configs=None):
+
+        if configs is None:
+            configs = TensorRTInferConfigs()
+
         print("TensorRT version:", trt.__version__)
-        config.max_workspace_size = max_workspace_size
+
+        builder = trt.Builder(configs.trt_logger)
+        builder.max_batch_size = max_batch_size
+        build_config =  builder.create_builder_config()
+        build_config.max_workspace_size = max_workspace_size
 
         network = builder.create_network(self.EXPLICIT_BATCH)
-        parser = trt.OnnxParser(network, TRT_LOGGER) 
 
-        # Parse model file
-        if not os.path.exists(model_dir):
-            print('ONNX file {} not found, t.'.format(model_dir))
-            exit(0)
-        with open(model_dir, 'rb') as model:
-            print('Beginning ONNX file parsing')
-            if not parser.parse(model.read()):
-                print ('ERROR: Failed to parse the ONNX file.')
-                for error in range(parser.num_errors):
-                    print (parser.get_error(error))
-                return None
+        self.engine = None 
+        if os.path.exists(trt_cache_file):
+            self.engine = self.build_engine_from_trt_file(trt_cache_file, configs.trt_logger)
+        else:
+            self.engine = self.build_engine_from_onnx_file(model_dir, builder, network, build_config, configs)
+            with open(trt_cache_file, "wb") as f:
+                f.write(self.engine.serialize())
 
-        if configs is not None:
-            if len(configs.dynamic_shape_info) != 0:
-                profile = builder.create_optimization_profile()
-                # profile.set_shape("image", (1, 3, 200, 200), (2, 3, 320, 320), (4, 3, 420, 420)) 
-                profile.set_shape("image", (1, 3, 320, 320), (1, 3, 320, 320), (1, 3, 320, 320)) 
-                profile.set_shape("im_size", (1, 2), (1, 2), (1, 2)) 
-                config.add_optimization_profile(profile)
-            else:
-                print(network.get_input(0).shape)
-
-        profile = builder.create_optimization_profile()
-        # profile.set_shape("image", (1, 3, 200, 200), (2, 3, 320, 320), (4, 3, 420, 420)) 
-        profile.set_shape("image", (1, 3, 320, 320), (1, 3, 320, 320), (1, 3, 320, 320)) 
-        profile.set_shape("im_size", (1, 2), (1, 2), (1, 2)) 
-        config.add_optimization_profile(profile)
-        self.engine = self.get_engine(model_dir, trt_cache_file, builder, network, config)
         self.input_names = []
         self.output_names = []
         for binding in self.engine:
@@ -109,17 +104,6 @@ class TensorRTInferenceEngine(object):
                 self.input_names.append(binding)
             else:
                 self.output_names.append(binding)
-
-    def is_dynamic_input_shape(shape):
-        for index, dim in enumerate(shape):
-            if dim < 0 and index > 0:
-                return True
-        return False
-
-    def is_dynamic_batch_size(shape):
-        if shape[0] == -1:
-            return True
-        return False
 
     def allocate_buffers(self, engine, context):
         inputs = []
@@ -170,27 +154,59 @@ class TensorRTInferenceEngine(object):
         # Return only the host outputs.
         return [out.host for out in outputs]
 
-    def get_engine(self, onnx_file_path, engine_file_path, builder, network, config):
-        """Attempts to load a serialized engine if available, otherwise builds a new TensorRT engine and saves it."""
-        def build_engine():
-            """Takes an ONNX file and creates a TensorRT engine to run inference with"""
-            #network.get_input(0).shape = [1, 3, 320, 320]
-            # The actual yolov3.onnx is generated with batch size 64. Reshape input to batch size 1
-            print('Completed parsing of ONNX file')
-            print('Building an engine from file {}; this may take a while...'.format(onnx_file_path))
-            engine = builder.build_engine(network, config)
-            print("Completed creating Engine")
-            with open(engine_file_path, "wb") as f:
-                f.write(engine.serialize())
-            return engine
+    def build_engine_from_onnx_file(self, model_dir, builder, network, build_config, configs):
+        # Takes an ONNX file and creates a TensorRT engine to run inference
+        parser = trt.OnnxParser(network, configs.trt_logger) 
+        if not os.path.exists(model_dir):
+            print('ONNX file {} not found, t.'.format(model_dir))
+            exit(0)
+        with open(model_dir, 'rb') as model:
+            print('Beginning ONNX file parsing')
+            if not parser.parse(model.read()):
+                print ('ERROR: Failed to parse the ONNX file.')
+                for error in range(parser.num_errors):
+                    print (parser.get_error(error))
+                return None
 
-        if os.path.exists(engine_file_path):
-            # If a serialized engine exists, use it instead of building an engine.
-            print("Reading engine from file {}".format(engine_file_path))
-            with open(engine_file_path, "rb") as f, trt.Runtime(TRT_LOGGER) as runtime:
-                return runtime.deserialize_cuda_engine(f.read())
-        else:
-            return build_engine()
+        # check input shape 
+        profile = builder.create_optimization_profile()
+        need_config_input_shape = False
+        for i in range(network.num_inputs):
+            tensor = network.get_input(i)
+            print(tensor.name, tensor.shape)
+            if is_dynamic_shape(tensor.shape, 1, len(tensor.shape)): 
+                if tensor.name not in configs.dynamic_shape_info:
+                    print("input:{} with dynamic shape {} please set configs by api:set_dynamic_shape_info.".format(tensor.name, tensor.shape))
+                    need_config_input_shape = True
+                else:
+                    min_shape =  build_config.optimize_shape_info[tensor.name][0]
+                    opt_shape =  build_config.optimize_shape_info[tensor.name][1]
+                    max_shape =  build_config.optimize_shape_info[tensor.name][2]
+                    profile.set_shape(tensor.name, min_shape, opt_shape, max_shape) 
+            elif is_dynamic_shape(tensor.shape, 0, 1):
+                rest_shape = list(tensor.shape[1:])
+                min_shape = [1] + rest_shape
+                opt_batch = [max_batch_size // 2] if builder.max_batch_size > 2  else [1]
+                opt_shape = opt_batch + rest_shape
+                max_shape = [builder.max_batch_size] + rest_shape
+                profile.set_shape(tensor.name, min_shape , opt_shape, max_shape) 
+            else:
+                print(1111)
+
+
+        if need_config_input_shape:
+            exit(0)
+        build_config.add_optimization_profile(profile)
+
+        engine = builder.build_engine(network, build_config)
+        print('Completed build engine of ONNX file')
+        return engine
+
+    def build_engine_from_trt_file(self, trt_cache_file, trt_logger):
+        # If a serialized trt engine exists, use it instead of building an engine.
+        print("Reading engine from file {}".format(trt_cache_file))
+        with open(trt_cache_file, "rb") as f, trt.Runtime(trt_logger) as runtime:
+            return  runtime.deserialize_cuda_engine(f.read())
 
     def infer(self, input_blobs):
         # Do inference

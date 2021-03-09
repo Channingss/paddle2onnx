@@ -60,14 +60,14 @@ def infer(args):
     parser = ConfigParser(args.cfg_file, args.pp_type)
     det_preprocess = DetPreprocessor(parser)
     det_postprocess = DetPostprocessor(parser)
-    #engine = TensorRTInferenceEngine(args.model_dir, trt_cache_file='tmp.trt')
+    engine = TensorRTInferenceEngine(args.model_dir, 1<<28, 1, trt_cache_file='tmp.trt')
     image = cv2.imread(args.image)
     inputs, shape_info = det_preprocess([image])
     import numpy as np
     np.save('input_0.npy', inputs[0].data)
     np.save('input_1.npy', inputs[1].data)
-    #outputs = engine.infer(inputs)
-    #det_results = det_postprocess(outputs, shape_info)
+    outputs = engine.infer(inputs)
+    det_results = det_postprocess(outputs, shape_info)
     #for det_result in det_results:
     #    for bbox in det_result.bboxes:
     #        if bbox.score < 0.5:
