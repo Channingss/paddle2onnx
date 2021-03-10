@@ -354,13 +354,17 @@ class Constant():
         value = np.ones(shape) * value
         value = value.astype(dtypes.DTYPE_PADDLE_NUMPY_MAP[dtype])
         value = value.flatten().tolist()
+
         if len(shape) ==0 and len(node.input('ShapeTensor')) > 0:
+            shape_tensor = mapper_helper.cast(graph,
+                                       node.input('ShapeTensor', 0),
+                                       node.input_dtype('ShapeTensor', 0), 'int64')
             graph.make_node(
                 'ConstantOfShape',
-                inputs=node.input('ShapeTensor'),
+                inputs=shape_tensor,
                 outputs=node.output('Out'),
                 attrs={
-                    'dims': shape,
+                    'dims': [1],
                     'dtype': dtypes.DTYPE_PADDLE_ONNX_MAP[dtype],
                     'value': value
                 })
