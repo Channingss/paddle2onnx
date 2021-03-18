@@ -273,6 +273,7 @@ public:
         , mBatchSize(batchSize)
     {
         // Full Dims implies no batch size.
+	    std::cout << engine->hasImplicitBatchDimension() << std::endl;
         assert(engine->hasImplicitBatchDimension() || mBatchSize == 0);
         // Create host and device buffers
         for (int i = 0; i < mEngine->getNbBindings(); i++)

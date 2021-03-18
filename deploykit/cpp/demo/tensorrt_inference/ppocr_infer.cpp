@@ -97,7 +97,7 @@ int main(int argc, char **argv) {
     preprocess.Run(imgs, &inputs, &shape_traces);
     // infer
     std::vector<Deploy::DataBlob> outputs;
-    tensorrt_engine.Infer(inputs, 1, &outputs);
+    tensorrt_engine.Infer(inputs, 0, &outputs);
     // postprocess
     std::vector<Deploy::PaddleOcrResult> results;
     postprocess.Run(outputs, shape_traces, &results);

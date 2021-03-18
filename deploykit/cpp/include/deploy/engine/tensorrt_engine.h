@@ -26,6 +26,7 @@
 
 #include "NvOnnxConfig.h"
 #include "NvOnnxParser.h"
+#include "NvInferRuntime.h"
 #include "include/deploy/common/blob.h"
 #include "include/deploy/engine/tensorrt/buffers.h"
 
@@ -114,8 +115,8 @@ class TensorRTInferenceEngine {
   //void ParseConfigs(const TritonInferenceConfigs &configs,
   //                  nic::InferOptions *options);
 
-  //void FeedInput(const std::vector<DataBlob> &input_blobs,
-  //               std::vector<nic::InferInput *> *inputs);
+  void FeedInput(const std::vector<DataBlob>& input_blobs,
+                 const TensorRT::BufferManager& buffers);
 
   //void FetchOutput(c std::vector<const nic::InferRequestedOutput *> *outputs);
 
